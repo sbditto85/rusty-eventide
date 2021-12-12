@@ -1,37 +1,33 @@
-use actix::prelude::*;
-
 pub mod messaging;
 pub mod settings;
 
+use messaging::*;
 use settings::*;
 
-#[derive(Message)]
-#[rtype(result = "()")]
-struct Stop;
-
-pub struct Consumer;
-
-impl Actor for Consumer {
-    type Context = Context<Self>;
+pub struct Consumer<R: Read> {
+    category: String,
+    reader: R,
 }
 
-impl Handler<Stop> for Consumer {
-    type Result = ();
-
-    fn handle(&mut self, _msg: Stop, ctx: &mut Context<Self>) -> Self::Result {
-        ctx.terminate();
+impl Consumer<SubstituteReader> {
+    pub fn new(category: &str) -> Consumer<SubstituteReader> {
+        Consumer {
+            category: category.to_string(),
+            reader: SubstituteReader::new(),
+        }
     }
 }
 
-impl Consumer {
-    pub fn new(_category: &str) -> Self {
-        Consumer
+impl Consumer<PostgresReader> {
+    pub fn build(category: &str) -> Consumer<PostgresReader> {
+        Consumer {
+            category: category.to_string(),
+            reader: PostgresReader,
+        }
     }
+}
 
-    pub fn build(_category: &str) -> Self {
-        Consumer
-    }
-
+impl<R: Read> Consumer<R> {
     pub fn add_handler<H: messaging::Handler>(self, _handler: H) -> Self {
         self
     }
@@ -41,30 +37,31 @@ impl Consumer {
     }
 
     pub fn start(self) -> ConsumerHandler {
-        let addr = Actor::start(self);
+        ConsumerHandler::new()
+    }
 
-        ConsumerHandler::new(addr)
+    fn tick(&mut self) {
+        let messages = self.reader.fetch_messages(&self.category);
+    }
+
+    fn reader(&self) -> &impl Read {
+        &self.reader
     }
 }
 
 pub struct ConsumerHandler {
-    address: Addr<Consumer>,
     stopped: bool,
 }
 
 impl ConsumerHandler {
-    pub fn new(address: Addr<Consumer>) -> Self {
-        Self {
-            address,
-            stopped: false,
-        }
+    pub fn new() -> Self {
+        Self { stopped: false }
     }
 
     pub fn stop(&mut self) {
         if self.stopped {
             return;
         }
-        self.address.do_send(Stop);
         self.stopped = true;
     }
 
@@ -81,14 +78,14 @@ impl ConsumerHandler {
 mod tests {
     use super::*;
 
-    #[actix::test]
-    async fn should_periodically_ask_for_messages() {
+    #[test]
+    fn should_periodically_ask_for_messages() {
         let mut consumer = Consumer::new("mycategory");
 
         consumer.tick();
 
         let reader = consumer.reader();
 
-        assert!(reader.request_count() > 0);
+        assert!(reader.fetch_count() > 0);
     }
 }
