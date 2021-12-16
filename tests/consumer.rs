@@ -1,4 +1,4 @@
-use consumer::{settings::Settings, *};
+use rusty_eventide::{settings::Settings, *};
 
 pub struct EventHandler;
 
