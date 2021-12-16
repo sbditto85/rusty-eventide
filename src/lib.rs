@@ -1,3 +1,4 @@
+pub mod controls;
 pub mod messaging;
 pub mod settings;
 
@@ -47,6 +48,10 @@ impl<R: Read> Consumer<R> {
     fn reader(&self) -> &impl Read {
         &self.reader
     }
+
+    fn reader_mut(&mut self) -> &mut impl Read {
+        &mut self.reader
+    }
 }
 
 pub struct ConsumerHandler {
@@ -79,7 +84,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_periodically_ask_for_messages() {
+    fn should_ask_for_messages_every_tick() {
         let mut consumer = Consumer::new("mycategory");
 
         consumer.tick();
@@ -87,5 +92,21 @@ mod tests {
         let reader = consumer.reader();
 
         assert!(reader.fetch_count() > 0);
+    }
+
+    #[test]
+    fn should_return_queued_messages_on_tick() {
+        let mut consumer = Consumer::new("mycategory");
+
+        let reader = consumer.reader_mut();
+        let messages = controls::messages::example();
+        let messages_count = messages.len() as u64;
+        reader.queue_messages(messages);
+
+        consumer.tick();
+
+        let reader = consumer.reader();
+
+        assert_eq!(messages_count, reader.fetched_messages_count());
     }
 }
