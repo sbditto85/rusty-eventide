@@ -2,7 +2,7 @@ pub mod controls;
 pub mod messaging;
 pub mod settings;
 
-use messaging::*;
+use messaging::{postgres::Category, *};
 use settings::*;
 
 pub struct Consumer<G: Get> {
@@ -19,11 +19,11 @@ impl Consumer<SubstituteGetter> {
     }
 }
 
-impl Consumer<PostgresGetter> {
-    pub fn build(category: &str) -> Consumer<PostgresGetter> {
+impl Consumer<Category> {
+    pub fn build(category: &str) -> Consumer<Category> {
         Consumer {
             category: category.to_string(),
-            get: PostgresGetter,
+            get: Category,
         }
     }
 }
@@ -101,7 +101,7 @@ mod tests {
         let get = consumer.get_mut();
         let messages = controls::messages::example();
         let messages_count = messages.len() as u64;
-        get.queue_messages(messages);
+        get.queue_messages(&messages);
 
         consumer.tick();
 
