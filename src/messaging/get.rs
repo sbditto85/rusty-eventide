@@ -77,16 +77,16 @@ impl GetTelemetry for SubstituteGetter {
     }
 }
 
-pub struct PostgresGeter;
+pub struct PostgresGetter;
 
 //TODO: actually do this
-impl Get for PostgresGeter {
+impl Get for PostgresGetter {
     fn fetch_messages(&mut self, _category: &str) -> () {}
 
     fn queue_messages(&mut self, _messages: Vec<Message>) {}
 }
 
-impl GetTelemetry for PostgresGeter {
+impl GetTelemetry for PostgresGetter {
     fn fetch_count(&self) -> u64 {
         0
     }

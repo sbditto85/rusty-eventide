@@ -19,11 +19,11 @@ impl Consumer<SubstituteGetter> {
     }
 }
 
-impl Consumer<PostgresGeter> {
-    pub fn build(category: &str) -> Consumer<PostgresGeter> {
+impl Consumer<PostgresGetter> {
+    pub fn build(category: &str) -> Consumer<PostgresGetter> {
         Consumer {
             category: category.to_string(),
-            get: PostgresGeter,
+            get: PostgresGetter,
         }
     }
 }
