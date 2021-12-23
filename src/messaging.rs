@@ -1,6 +1,6 @@
-mod read;
+mod get;
 
-pub use read::*;
+pub use get::*;
 
 pub struct Message;
 

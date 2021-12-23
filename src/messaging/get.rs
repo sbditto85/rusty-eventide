@@ -4,23 +4,23 @@ use std::collections::HashMap;
 
 use crate::messaging::Message;
 
-pub trait Read: ReadTelemetry {
+pub trait Get: GetTelemetry {
     fn fetch_messages(&mut self, _category: &str) -> ();
 
     fn queue_messages(&mut self, _messages: Vec<Message>);
 }
 
-pub trait ReadTelemetry {
+pub trait GetTelemetry {
     fn fetch_count(&self) -> u64;
     fn record_fetch(&mut self);
     fn fetched_messages_count(&self) -> u64;
 }
 
-pub struct SubstituteReader {
+pub struct SubstituteGetter {
     telemetry: HashMap<String, Value>,
 }
 
-impl SubstituteReader {
+impl SubstituteGetter {
     pub(crate) fn new() -> Self {
         Self {
             telemetry: HashMap::new(),
@@ -28,7 +28,7 @@ impl SubstituteReader {
     }
 }
 
-impl Read for SubstituteReader {
+impl Get for SubstituteGetter {
     fn fetch_messages(&mut self, _category: &str) -> () {
         self.record_fetch();
     }
@@ -36,7 +36,7 @@ impl Read for SubstituteReader {
     fn queue_messages(&mut self, _messages: Vec<Message>) {}
 }
 
-impl ReadTelemetry for SubstituteReader {
+impl GetTelemetry for SubstituteGetter {
     fn fetch_count(&self) -> u64 {
         self.telemetry
             .get("fetch_count")
@@ -77,16 +77,16 @@ impl ReadTelemetry for SubstituteReader {
     }
 }
 
-pub struct PostgresReader;
+pub struct PostgresGeter;
 
 //TODO: actually do this
-impl Read for PostgresReader {
+impl Get for PostgresGeter {
     fn fetch_messages(&mut self, _category: &str) -> () {}
 
     fn queue_messages(&mut self, _messages: Vec<Message>) {}
 }
 
-impl ReadTelemetry for PostgresReader {
+impl GetTelemetry for PostgresGeter {
     fn fetch_count(&self) -> u64 {
         0
     }

@@ -5,30 +5,30 @@ pub mod settings;
 use messaging::*;
 use settings::*;
 
-pub struct Consumer<R: Read> {
+pub struct Consumer<G: Get> {
     category: String,
-    reader: R,
+    get: G,
 }
 
-impl Consumer<SubstituteReader> {
-    pub fn new(category: &str) -> Consumer<SubstituteReader> {
+impl Consumer<SubstituteGetter> {
+    pub fn new(category: &str) -> Consumer<SubstituteGetter> {
         Consumer {
             category: category.to_string(),
-            reader: SubstituteReader::new(),
+            get: SubstituteGetter::new(),
         }
     }
 }
 
-impl Consumer<PostgresReader> {
-    pub fn build(category: &str) -> Consumer<PostgresReader> {
+impl Consumer<PostgresGeter> {
+    pub fn build(category: &str) -> Consumer<PostgresGeter> {
         Consumer {
             category: category.to_string(),
-            reader: PostgresReader,
+            get: PostgresGeter,
         }
     }
 }
 
-impl<R: Read> Consumer<R> {
+impl<R: Get> Consumer<R> {
     pub fn add_handler<H: messaging::Handler>(self, _handler: H) -> Self {
         self
     }
@@ -42,15 +42,15 @@ impl<R: Read> Consumer<R> {
     }
 
     fn tick(&mut self) {
-        let messages = self.reader.fetch_messages(&self.category);
+        let messages = self.get.fetch_messages(&self.category);
     }
 
-    fn reader(&self) -> &impl Read {
-        &self.reader
+    fn get(&self) -> &impl Get {
+        &self.get
     }
 
-    fn reader_mut(&mut self) -> &mut impl Read {
-        &mut self.reader
+    fn get_mut(&mut self) -> &mut impl Get {
+        &mut self.get
     }
 }
 
@@ -89,24 +89,24 @@ mod tests {
 
         consumer.tick();
 
-        let reader = consumer.reader();
+        let get = consumer.get();
 
-        assert!(reader.fetch_count() > 0);
+        assert!(get.fetch_count() > 0);
     }
 
     #[test]
     fn should_return_queued_messages_on_tick() {
         let mut consumer = Consumer::new("mycategory");
 
-        let reader = consumer.reader_mut();
+        let get = consumer.get_mut();
         let messages = controls::messages::example();
         let messages_count = messages.len() as u64;
-        reader.queue_messages(messages);
+        get.queue_messages(messages);
 
         consumer.tick();
 
-        let reader = consumer.reader();
+        let get = consumer.get();
 
-        assert_eq!(messages_count, reader.fetched_messages_count());
+        assert_eq!(messages_count, get.fetched_messages_count());
     }
 }
