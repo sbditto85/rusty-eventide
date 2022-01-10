@@ -5,16 +5,14 @@ use std::collections::HashMap;
 use crate::messaging::Message;
 
 pub trait Get: GetTelemetry {
-    fn fetch_messages(&mut self, _category: &str) -> ();
-
-    fn queue_messages(&mut self, _messages: &[Message]);
+    fn get(&mut self, _category: &str) -> Vec<Message>;
 }
 
 pub trait GetTelemetry {
-    fn fetch_count(&self) -> u64;
-    fn record_fetch(&mut self);
-    fn fetched_messages_count(&self) -> u64;
-    fn record_fetched_messages(&mut self, messages: &[Message]);
+    fn get_count(&self) -> u64;
+    fn record_get(&mut self);
+    fn get_messages_count(&self) -> u64;
+    fn record_got_messages(&mut self, messages: &[Message]);
 }
 
 pub struct SubstituteGetter {
@@ -29,26 +27,30 @@ impl SubstituteGetter {
             telemetry: HashMap::new(),
         }
     }
-}
 
-impl Get for SubstituteGetter {
-    fn fetch_messages(&mut self, _category: &str) -> () {
-        self.record_fetch();
-        if self.messages.len() > 0 {
-            let messages = std::mem::replace(&mut self.messages, Vec::new());
-            self.record_fetched_messages(&messages);
-        }
-    }
-
-    fn queue_messages(&mut self, messages: &[Message]) {
+    pub(crate) fn queue_messages(&mut self, messages: &[Message]) {
         self.messages.extend_from_slice(messages)
     }
 }
 
+impl Get for SubstituteGetter {
+    fn get(&mut self, _category: &str) -> Vec<Message> {
+        self.record_get();
+        if self.messages.len() > 0 {
+            let messages = std::mem::replace(&mut self.messages, Vec::new());
+            self.record_got_messages(&messages);
+
+            messages
+        } else {
+            vec![]
+        }
+    }
+}
+
 impl GetTelemetry for SubstituteGetter {
-    fn fetch_count(&self) -> u64 {
+    fn get_count(&self) -> u64 {
         self.telemetry
-            .get("fetch_count")
+            .get("get_count")
             .map(|value| {
                 if let Value::Number(Number::U64(count)) = value {
                     *count
@@ -59,9 +61,9 @@ impl GetTelemetry for SubstituteGetter {
             .unwrap_or(0)
     }
 
-    fn record_fetch(&mut self) {
+    fn record_get(&mut self) {
         self.telemetry
-            .entry("fetch_count".to_string())
+            .entry("get_count".to_string())
             .and_modify(|value| {
                 if let Value::Number(Number::U64(count)) = value {
                     *count += 1;
@@ -72,9 +74,9 @@ impl GetTelemetry for SubstituteGetter {
             .or_insert(Value::Number(Number::U64(1)));
     }
 
-    fn fetched_messages_count(&self) -> u64 {
+    fn get_messages_count(&self) -> u64 {
         self.telemetry
-            .get("fetched_messages_count")
+            .get("get_messages_count")
             .map(|value| {
                 if let Value::Number(Number::U64(count)) = value {
                     *count
@@ -85,10 +87,10 @@ impl GetTelemetry for SubstituteGetter {
             .unwrap_or(0)
     }
 
-    fn record_fetched_messages(&mut self, messages: &[Message]) {
+    fn record_got_messages(&mut self, messages: &[Message]) {
         let fetched_count = messages.len() as u64;
         self.telemetry
-            .entry("fetched_messages_count".to_string())
+            .entry("get_messages_count".to_string())
             .and_modify(|value| {
                 if let Value::Number(Number::U64(count)) = value {
                     *count += fetched_count;
@@ -103,10 +105,15 @@ impl GetTelemetry for SubstituteGetter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::controls::*;
 
     #[test]
-    #[ignore]
+    // #[ignore]
     fn should_respond_to_fetch_with_queued_messages() {
-        assert!(false);
+        let messages = messages::example();
+        let mut get = SubstituteGetter::new();
+        get.queue_messages(&messages);
+        let returned_messages = get.get("my-category");
+        assert_eq!(messages, returned_messages);
     }
 }

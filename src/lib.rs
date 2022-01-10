@@ -41,15 +41,15 @@ impl<R: Get> Consumer<R> {
         ConsumerHandler::new()
     }
 
-    fn tick(&mut self) {
-        let messages = self.get.fetch_messages(&self.category);
+    pub fn tick(&mut self) {
+        let _messages = self.get.get(&self.category);
     }
 
-    fn get(&self) -> &impl Get {
+    pub fn get(&self) -> &R {
         &self.get
     }
 
-    fn get_mut(&mut self) -> &mut impl Get {
+    pub fn get_mut(&mut self) -> &mut R {
         &mut self.get
     }
 }
@@ -91,11 +91,11 @@ mod tests {
 
         let get = consumer.get();
 
-        assert!(get.fetch_count() > 0);
+        assert!(get.get_count() > 0);
     }
 
     #[test]
-    fn should_return_queued_messages_on_tick() {
+    fn should_return_same_number_of_queued_messages_on_tick() {
         let mut consumer = Consumer::new("mycategory");
 
         let get = consumer.get_mut();
@@ -107,6 +107,6 @@ mod tests {
 
         let get = consumer.get();
 
-        assert_eq!(messages_count, get.fetched_messages_count());
+        assert_eq!(messages_count, get.get_messages_count());
     }
 }
