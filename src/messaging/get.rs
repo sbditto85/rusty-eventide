@@ -37,13 +37,14 @@ impl SubstituteGetter {
 }
 
 impl Get for SubstituteGetter {
-    fn get(&mut self, _position: i64) -> Vec<Message> {
+    fn get(&mut self, position: i64) -> Vec<Message> {
         self.record_get();
         if self.messages.len() > 0 {
             let messages = std::mem::replace(&mut self.messages, Vec::new());
-            self.record_got_messages(&messages);
+            let limited_messages = &messages[position as usize..];
+            self.record_got_messages(&limited_messages);
 
-            messages
+            limited_messages.to_vec()
         } else {
             vec![]
         }
@@ -117,5 +118,52 @@ mod tests {
         get.queue_messages(&messages);
         let returned_messages = get.get(0);
         assert_eq!(messages, returned_messages);
+    }
+
+    #[test]
+    fn should_respond_with_no_messages_when_none_queued() {
+        let mut get = SubstituteGetter::new("my_category");
+        let returned_messages = get.get(0);
+        assert!(returned_messages.len() == 0);
+    }
+
+    #[test]
+    fn should_respond_to_fetch_with_queued_messages_respecting_position_as_index() {
+        let messages = messages::example();
+        let mut get = SubstituteGetter::new("my_category");
+        get.queue_messages(&messages);
+        let returned_messages = get.get(1);
+        assert_eq!(messages[1..], returned_messages);
+    }
+
+    #[test]
+    fn should_record_a_count_for_each_get() {
+        let mut get = SubstituteGetter::new("my_category");
+
+        assert_eq!(get.get_count(), 0);
+        get.get(0);
+        assert_eq!(get.get_count(), 1);
+        get.get(0);
+        assert_eq!(get.get_count(), 2);
+    }
+
+    #[test]
+    fn should_record_message_count_for_each_get() {
+        let messages = messages::example();
+        let messages_len = messages.len() as u64;
+        let mut get = SubstituteGetter::new("my_category");
+
+        assert_eq!(get.get_messages_count(), 0);
+        get.queue_messages(&messages);
+        let _ = get.get(0);
+        assert_eq!(get.get_messages_count(), messages_len);
+
+        get.queue_messages(&messages);
+        let _ = get.get(0);
+        assert_eq!(get.get_messages_count(), messages_len * 2);
+
+        get.queue_messages(&messages);
+        let _ = get.get(0);
+        assert_eq!(get.get_messages_count(), messages_len * 3);
     }
 }
