@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::messaging::Message;
 
 pub trait Get: GetTelemetry {
-    fn get(&mut self, _category: &str) -> Vec<Message>;
+    fn get(&mut self, position: i64) -> Vec<Message>;
 }
 
 pub trait GetTelemetry {
@@ -16,25 +16,28 @@ pub trait GetTelemetry {
 }
 
 pub struct SubstituteGetter {
+    #[allow(dead_code)]
+    category: String,
     messages: Vec<Message>,
     telemetry: HashMap<String, Value>,
 }
 
 impl SubstituteGetter {
-    pub(crate) fn new() -> Self {
+    pub fn new(category: &str) -> Self {
         Self {
+            category: category.to_string(),
             messages: vec![],
             telemetry: HashMap::new(),
         }
     }
 
-    pub(crate) fn queue_messages(&mut self, messages: &[Message]) {
+    pub fn queue_messages(&mut self, messages: &[Message]) {
         self.messages.extend_from_slice(messages)
     }
 }
 
 impl Get for SubstituteGetter {
-    fn get(&mut self, _category: &str) -> Vec<Message> {
+    fn get(&mut self, _position: i64) -> Vec<Message> {
         self.record_get();
         if self.messages.len() > 0 {
             let messages = std::mem::replace(&mut self.messages, Vec::new());
@@ -108,12 +111,11 @@ mod tests {
     use crate::controls::*;
 
     #[test]
-    // #[ignore]
     fn should_respond_to_fetch_with_queued_messages() {
         let messages = messages::example();
-        let mut get = SubstituteGetter::new();
+        let mut get = SubstituteGetter::new("my_category");
         get.queue_messages(&messages);
-        let returned_messages = get.get("my-category");
+        let returned_messages = get.get(0);
         assert_eq!(messages, returned_messages);
     }
 }

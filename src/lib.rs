@@ -6,6 +6,7 @@ use messaging::{postgres::Category, *};
 use settings::*;
 
 pub struct Consumer<G: Get> {
+    #[allow(dead_code)]
     category: String,
     get: G,
 }
@@ -14,7 +15,7 @@ impl Consumer<SubstituteGetter> {
     pub fn new(category: &str) -> Consumer<SubstituteGetter> {
         Consumer {
             category: category.to_string(),
-            get: SubstituteGetter::new(),
+            get: SubstituteGetter::new(category),
         }
     }
 }
@@ -42,7 +43,7 @@ impl<R: Get> Consumer<R> {
     }
 
     pub fn tick(&mut self) {
-        let _messages = self.get.get(&self.category);
+        let _messages = self.get.get(0);
     }
 
     pub fn get(&self) -> &R {
