@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use crate::back_off::BackOff;
 
-
 pub struct SpecificBackOff {
     duration: Duration,
 }
@@ -18,7 +17,6 @@ impl BackOff for SpecificBackOff {
         self.duration
     }
 }
-
 
 pub struct NoMessageCount {
     duration: Duration,

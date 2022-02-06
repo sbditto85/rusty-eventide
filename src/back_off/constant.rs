@@ -20,7 +20,6 @@ impl ConstantBackOff {
     }
 }
 
-
 impl BackOff for ConstantBackOff {
     fn duration(&mut self, _iteration_message_count: u64) -> Duration {
         self.duration

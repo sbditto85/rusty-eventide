@@ -55,7 +55,7 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
 
     pub fn with_back_off<B2: BackOff>(self, back_off: B2) -> Consumer<G, B2> {
         // Is there a better way to do this? where I only have to specify back_off?
-            // can't use `..self` because B and B2 are different types :(
+        // can't use `..self` because B and B2 are different types :(
         Consumer {
             category: self.category,
             active: self.active,
@@ -223,7 +223,7 @@ mod tests {
 
         let mut consumer = Consumer::new("mycategory")
             .with_back_off(crate::controls::back_off::NoMessageCount::new(duration));
-    
+
         let get = consumer.get_mut();
         let messages = controls::messages::example();
         get.queue_messages(&messages);
