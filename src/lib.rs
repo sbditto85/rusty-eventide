@@ -77,9 +77,9 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
                     break;
                 }
 
-                consumer.tick();
+                let iteration_message_count = consumer.tick();
 
-                let wait_time = consumer.back_off.duration();
+                let wait_time = consumer.back_off.duration(iteration_message_count);
 
                 // Give the main thread a chance to lock the mutex
                 drop(consumer);
@@ -90,9 +90,11 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
         ConsumerHandler::new(arc.clone(), handle)
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> u64 {
         self.iterations += 1;
-        let _messages = self.get.get(0);
+        let messages = self.get.get(0);
+
+        messages.len() as u64
     }
 
     pub fn get(&self) -> &G {
@@ -212,6 +214,34 @@ mod tests {
         let ending = consumer.iterations();
         // Only enough time to get one iteration off due to back off being longer then test sleep
         let expected_ending = beginning + 1;
+        assert_eq!(expected_ending, ending);
+    }
+
+    #[test]
+    fn should_be_able_to_use_last_message_count_to_determine_back_off() {
+        let duration = std::time::Duration::from_millis(60);
+
+        let mut consumer = Consumer::new("mycategory")
+            .with_back_off(crate::controls::back_off::NoMessageCount::new(duration));
+    
+        let get = consumer.get_mut();
+        let messages = controls::messages::example();
+        get.queue_messages(&messages);
+
+        let mut consumer = consumer.start();
+
+        assert!(consumer.started());
+        let beginning = consumer.iterations();
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        consumer.stop();
+        assert!(consumer.stopped());
+
+        let ending = consumer.iterations();
+        // Only enough time to do one iteration with a message then immediately try for another
+        //  which will cause a longer pause then the sleep between begin and end because no messages
+        let expected_ending = beginning + 2;
         assert_eq!(expected_ending, ending);
     }
 }
