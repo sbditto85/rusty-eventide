@@ -60,8 +60,7 @@ impl<G: Get + Send + 'static> Consumer<G> {
                     break;
                 }
 
-                consumer.iterations += 1;
-
+                consumer.tick();
 
                 let wait_time_millis = 10; //TODO: calculate via back off
                 
@@ -75,6 +74,7 @@ impl<G: Get + Send + 'static> Consumer<G> {
     }
 
     pub fn tick(&mut self) {
+        self.iterations += 1;
         let _messages = self.get.get(0);
     }
 
