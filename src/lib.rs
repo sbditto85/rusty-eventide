@@ -222,7 +222,7 @@ mod tests {
         let duration = std::time::Duration::from_millis(60);
 
         let mut consumer = Consumer::new("mycategory")
-            .with_back_off(crate::controls::back_off::NoMessageCount::new(duration));
+            .with_back_off(crate::controls::back_off::OnNoMessageCount::new(duration));
 
         let get = consumer.get_mut();
         let messages = controls::messages::example();

@@ -18,17 +18,17 @@ impl BackOff for SpecificBackOff {
     }
 }
 
-pub struct NoMessageCount {
+pub struct OnNoMessageCount {
     duration: Duration,
 }
 
-impl NoMessageCount {
+impl OnNoMessageCount {
     pub fn new(duration: Duration) -> Self {
         Self { duration }
     }
 }
 
-impl BackOff for NoMessageCount {
+impl BackOff for OnNoMessageCount {
     fn duration(&mut self, iteration_message_count: u64) -> Duration {
         if iteration_message_count > 0 {
             Duration::from_millis(0)
