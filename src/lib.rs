@@ -2,44 +2,49 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
+use back_off::{constant::ConstantBackOff, BackOff};
 use messaging::{postgres::Category, *};
 use settings::*;
 
+pub mod back_off;
 pub mod controls;
 pub mod messaging;
 pub mod settings;
 
-pub struct Consumer<G: Get> {
+pub struct Consumer<G: Get, B: BackOff> {
     #[allow(dead_code)]
     category: String,
     active: bool,
     iterations: u64,
     get: G,
+    back_off: B,
 }
 
-impl Consumer<SubstituteGetter> {
-    pub fn new(category: &str) -> Consumer<SubstituteGetter> {
+impl Consumer<SubstituteGetter, ConstantBackOff> {
+    pub fn new(category: &str) -> Consumer<SubstituteGetter, ConstantBackOff> {
         Consumer {
             category: category.to_string(),
             active: true,
             iterations: 0,
             get: SubstituteGetter::new(category),
+            back_off: ConstantBackOff::new(),
         }
     }
 }
 
-impl Consumer<Category> {
-    pub fn build(category: &str) -> Consumer<Category> {
+impl Consumer<Category, ConstantBackOff> {
+    pub fn build(category: &str) -> Consumer<Category, ConstantBackOff> {
         Consumer {
             category: category.to_string(),
             active: true,
             iterations: 0,
             get: Category,
+            back_off: ConstantBackOff::build(),
         }
     }
 }
 
-impl<G: Get + Send + 'static> Consumer<G> {
+impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
     pub fn add_handler<H: messaging::Handler>(self, _handler: H) -> Self {
         self
     }
@@ -48,7 +53,19 @@ impl<G: Get + Send + 'static> Consumer<G> {
         self
     }
 
-    pub fn start(self) -> ConsumerHandler<G> {
+    pub fn with_back_off<B2: BackOff>(self, back_off: B2) -> Consumer<G, B2> {
+        // Is there a better way to do this? where I only have to specify back_off?
+            // can't use `..self` because B and B2 are different types :(
+        Consumer {
+            category: self.category,
+            active: self.active,
+            iterations: self.iterations,
+            get: self.get,
+            back_off,
+        }
+    }
+
+    pub fn start(self) -> ConsumerHandler<G, B> {
         let arc = Arc::new(Mutex::new(self));
         let thread_arc = arc.clone();
 
@@ -62,11 +79,11 @@ impl<G: Get + Send + 'static> Consumer<G> {
 
                 consumer.tick();
 
-                let wait_time_millis = 10; //TODO: calculate via back off
-                
+                let wait_time = consumer.back_off.duration();
+
                 // Give the main thread a chance to lock the mutex
                 drop(consumer);
-                std::thread::sleep(std::time::Duration::from_millis(wait_time_millis));
+                std::thread::sleep(wait_time);
             }
         });
 
@@ -87,14 +104,17 @@ impl<G: Get + Send + 'static> Consumer<G> {
     }
 }
 
-pub struct ConsumerHandler<G: Get> {
-    consumer: Arc<Mutex<Consumer<G>>>,
+pub struct ConsumerHandler<G: Get, B: BackOff> {
+    consumer: Arc<Mutex<Consumer<G, B>>>,
     handle: Option<JoinHandle<()>>,
 }
 
-impl<G: Get> ConsumerHandler<G> {
-    pub fn new(consumer: Arc<Mutex<Consumer<G>>>, handle: JoinHandle<()>) -> Self {
-        Self { consumer, handle: Some(handle) }
+impl<G: Get, B: BackOff> ConsumerHandler<G, B> {
+    pub fn new(consumer: Arc<Mutex<Consumer<G, B>>>, handle: JoinHandle<()>) -> Self {
+        Self {
+            consumer,
+            handle: Some(handle),
+        }
     }
 
     pub fn iterations(&self) -> u64 {
@@ -161,7 +181,7 @@ mod tests {
         let beginning = consumer.iterations();
 
         std::thread::sleep(std::time::Duration::from_millis(50));
-        
+
         consumer.stop();
         assert!(consumer.stopped());
 
@@ -171,5 +191,27 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(50));
 
         assert_eq!(ending, consumer.iterations());
+    }
+
+    #[test]
+    fn should_be_able_to_specify_a_back_off_strategy() {
+        let duration = std::time::Duration::from_millis(60);
+
+        let mut consumer = Consumer::new("mycategory")
+            .with_back_off(crate::controls::back_off::SpecificBackOff::new(duration))
+            .start();
+
+        assert!(consumer.started());
+        let beginning = consumer.iterations();
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        consumer.stop();
+        assert!(consumer.stopped());
+
+        let ending = consumer.iterations();
+        // Only enough time to get one iteration off due to back off being longer then test sleep
+        let expected_ending = beginning + 1;
+        assert_eq!(expected_ending, ending);
     }
 }
