@@ -13,6 +13,12 @@ impl ConstantBackOff {
         }
     }
 
+    pub fn new_with_duration(duration: Duration) -> Self {
+        Self {
+            duration
+        }
+    }
+
     pub fn build() -> Self {
         Self {
             duration: Duration::from_millis(100),

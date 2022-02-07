@@ -200,7 +200,7 @@ mod tests {
         let duration = std::time::Duration::from_millis(60);
 
         let mut consumer = Consumer::new("mycategory")
-            .with_back_off(crate::controls::back_off::SpecificBackOff::new(duration))
+            .with_back_off(crate::back_off::constant::ConstantBackOff::new_with_duration(duration))
             .start();
 
         assert!(consumer.started());
