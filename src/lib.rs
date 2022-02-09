@@ -92,7 +92,9 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
 
     pub fn tick(&mut self) -> u64 {
         self.iterations += 1;
-        let messages = self.get.get(0);
+        let messages = self.get.get(0); //TODO: handle position
+
+        // TODO: serve messages to the handlers
 
         messages.len() as u64
     }
@@ -147,6 +149,10 @@ impl<G: Get, B: BackOff> ConsumerHandler<G, B> {
 mod tests {
     use super::*;
 
+    /////////////////////
+    // Get
+    /////////////////////
+
     #[test]
     fn should_ask_for_messages_every_tick() {
         let mut consumer = Consumer::new("mycategory");
@@ -174,6 +180,10 @@ mod tests {
         assert_eq!(messages_count, get.get_messages_count());
     }
 
+    /////////////////////
+    // Running
+    /////////////////////
+
     // Is this a good test? idk, feels a little like imperative shell to me
     #[test]
     fn should_continue_tick_until_stopped() {
@@ -194,6 +204,10 @@ mod tests {
 
         assert_eq!(ending, consumer.iterations());
     }
+
+    /////////////////////
+    // Back off
+    /////////////////////
 
     #[test]
     fn should_be_able_to_specify_a_back_off_strategy() {
@@ -244,4 +258,19 @@ mod tests {
         let expected_ending = beginning + 2;
         assert_eq!(expected_ending, ending);
     }
+
+    /////////////////////
+    // Handler
+    /////////////////////
+
+    #[test]
+    #[ignore]
+    fn should_offer_messages_to_handler_on_tick() {}
+
+    /////////////////////
+    // Position
+    /////////////////////
+    #[test]
+    #[ignore]
+    fn should_store_position_periodically_to_optimize_resume() {}
 }

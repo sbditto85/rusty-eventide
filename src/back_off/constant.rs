@@ -14,9 +14,7 @@ impl ConstantBackOff {
     }
 
     pub fn new_with_duration(duration: Duration) -> Self {
-        Self {
-            duration
-        }
+        Self { duration }
     }
 
     pub fn build() -> Self {
