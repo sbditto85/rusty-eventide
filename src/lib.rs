@@ -215,6 +215,10 @@ mod tests {
         assert_eq!(ending, consumer.iterations());
     }
 
+    #[test]
+    #[ignore]
+    fn should_be_able_to_wait_until_consumer_is_done() {}
+
     /////////////////////
     // Back off
     /////////////////////
@@ -276,19 +280,21 @@ mod tests {
     #[test]
     fn should_offer_messages_to_handler_on_tick() {
         let handler = controls::handler::TrackingHandler::build();
-        let mut consumer = Consumer::new("mycategory")
-            .add_handler(handler.clone());
+        let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
         let get = consumer.get_mut();
         let messages = controls::messages::example();
         let messages_count = messages.len() as u64;
         get.queue_messages(&messages);
 
-
         consumer.tick();
 
         assert_eq!(handler.message_count(), messages_count);
     }
+
+    #[test]
+    #[ignore]
+    fn should_stop_processing_messages_when_handler_errors_on_tick() {}
 
     /////////////////////
     // Position

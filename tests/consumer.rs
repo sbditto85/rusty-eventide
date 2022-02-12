@@ -13,9 +13,7 @@ impl EventHandler {
 }
 
 impl messaging::Handler for EventHandler {
-    fn handle(&mut self, _message: messaging::Message) {
-
-    }
+    fn handle(&mut self, _message: messaging::Message) {}
 }
 
 #[test]

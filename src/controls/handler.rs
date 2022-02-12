@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::messaging::{Message, Handler};
+use crate::messaging::{Handler, Message};
 
 #[derive(Debug, Clone)]
 pub struct TrackingHandler {
@@ -16,7 +16,9 @@ impl Handler for TrackingHandler {
 
 impl TrackingHandler {
     pub fn build() -> Self {
-        Self { count: Arc::new(Mutex::new(0)) }
+        Self {
+            count: Arc::new(Mutex::new(0)),
+        }
     }
 
     pub fn message_count(&self) -> u64 {
