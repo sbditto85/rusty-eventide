@@ -14,6 +14,7 @@ pub mod settings;
 pub struct Consumer<G: Get, B: BackOff> {
     #[allow(dead_code)]
     category: String,
+    handlers: Vec<Box<dyn Handler + Send>>,
     active: bool,
     iterations: u64,
     get: G,
@@ -24,6 +25,7 @@ impl Consumer<SubstituteGetter, ConstantBackOff> {
     pub fn new(category: &str) -> Consumer<SubstituteGetter, ConstantBackOff> {
         Consumer {
             category: category.to_string(),
+            handlers: Vec::new(),
             active: true,
             iterations: 0,
             get: SubstituteGetter::new(category),
@@ -36,6 +38,7 @@ impl Consumer<Category, ConstantBackOff> {
     pub fn build(category: &str) -> Consumer<Category, ConstantBackOff> {
         Consumer {
             category: category.to_string(),
+            handlers: Vec::new(),
             active: true,
             iterations: 0,
             get: Category,
@@ -45,7 +48,8 @@ impl Consumer<Category, ConstantBackOff> {
 }
 
 impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
-    pub fn add_handler<H: messaging::Handler>(self, _handler: H) -> Self {
+    pub fn add_handler<H: messaging::Handler + Send + 'static>(mut self, handler: H) -> Self {
+        self.handlers.push(Box::new(handler));
         self
     }
 
@@ -58,6 +62,7 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
         // can't use `..self` because B and B2 are different types :(
         Consumer {
             category: self.category,
+            handlers: self.handlers,
             active: self.active,
             iterations: self.iterations,
             get: self.get,
@@ -93,10 +98,15 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
     pub fn tick(&mut self) -> u64 {
         self.iterations += 1;
         let messages = self.get.get(0); //TODO: handle position
+        let messages_length = messages.len();
 
-        // TODO: serve messages to the handlers
+        for message in messages {
+            for handler in &mut self.handlers {
+                handler.handle(message.clone());
+            }
+        }
 
-        messages.len() as u64
+        messages_length as u64
     }
 
     pub fn get(&self) -> &G {
@@ -264,8 +274,21 @@ mod tests {
     /////////////////////
 
     #[test]
-    #[ignore]
-    fn should_offer_messages_to_handler_on_tick() {}
+    fn should_offer_messages_to_handler_on_tick() {
+        let handler = controls::handler::TrackingHandler::build();
+        let mut consumer = Consumer::new("mycategory")
+            .add_handler(handler.clone());
+
+        let get = consumer.get_mut();
+        let messages = controls::messages::example();
+        let messages_count = messages.len() as u64;
+        get.queue_messages(&messages);
+
+
+        consumer.tick();
+
+        assert_eq!(handler.message_count(), messages_count);
+    }
 
     /////////////////////
     // Position

@@ -6,4 +6,6 @@ pub use get::*;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Message;
 
-pub trait Handler {}
+pub trait Handler {
+    fn handle(&mut self, message: Message);
+}
