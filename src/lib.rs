@@ -83,10 +83,9 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
                     break;
                 }
 
-                let iteration_message_count = match consumer.tick() {
-                    Ok(count) => count,
-                    Err(_handle_error) => break,
-                };
+                let iteration_message_count = consumer
+                    .tick()
+                    .expect("me to write a test to force this to be handled");
 
                 let wait_time = consumer.back_off.duration(iteration_message_count);
 
@@ -276,6 +275,10 @@ mod tests {
         let expected_ending = beginning + 2;
         assert_eq!(expected_ending, ending);
     }
+
+    #[test]
+    #[ignore]
+    fn should_stop_processing_messages_when_handler_errors_on_start() {}
 
     /////////////////////
     // Handler
