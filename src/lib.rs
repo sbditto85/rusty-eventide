@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -82,7 +83,10 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
                     break;
                 }
 
-                let iteration_message_count = consumer.tick();
+                let iteration_message_count = match consumer.tick() {
+                    Ok(count) => count,
+                    Err(_handle_error) => break,
+                };
 
                 let wait_time = consumer.back_off.duration(iteration_message_count);
 
@@ -95,18 +99,18 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
         ConsumerHandler::new(arc.clone(), handle)
     }
 
-    pub fn tick(&mut self) -> u64 {
+    pub fn tick(&mut self) -> Result<u64, HandleError> {
         self.iterations += 1;
         let messages = self.get.get(0); //TODO: handle position
         let messages_length = messages.len();
 
         for message in messages {
             for handler in &mut self.handlers {
-                handler.handle(message.clone());
+                handler.handle(message.clone())?;
             }
         }
 
-        messages_length as u64
+        Ok(messages_length as u64)
     }
 
     pub fn get(&self) -> &G {
@@ -293,8 +297,19 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn should_stop_processing_messages_when_handler_errors_on_tick() {}
+    fn should_stop_processing_messages_when_handler_errors_on_tick() {
+        let handler = controls::handler::FailingHandler::build();
+        let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
+
+        let get = consumer.get_mut();
+        let messages = controls::messages::example();
+        get.queue_messages(&messages);
+
+        consumer.tick();
+
+        let only_one_message_handled = 1;
+        assert_eq!(handler.message_count(), only_one_message_handled);
+    }
 
     /////////////////////
     // Position

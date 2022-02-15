@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 microserde = "0.1.13"
+thiserror = "1.0"

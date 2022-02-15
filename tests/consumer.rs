@@ -1,4 +1,4 @@
-use rusty_eventide::{settings::Settings, *};
+use rusty_eventide::{messaging::HandleError, settings::Settings, *};
 
 pub struct EventHandler;
 
@@ -13,7 +13,9 @@ impl EventHandler {
 }
 
 impl messaging::Handler for EventHandler {
-    fn handle(&mut self, _message: messaging::Message) {}
+    fn handle(&mut self, _message: messaging::Message) -> Result<(), HandleError> {
+        Ok(())
+    }
 }
 
 #[test]
