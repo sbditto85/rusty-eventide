@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -85,7 +84,7 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
 
                 let iteration_message_count = consumer
                     .tick()
-                    .expect("me to write a test to force this to be handled");
+                    .expect("me to write a test to force this to be handled"); //TODO: handle this test
 
                 let wait_time = consumer.back_off.duration(iteration_message_count);
 
@@ -170,7 +169,7 @@ mod tests {
     fn should_ask_for_messages_every_tick() {
         let mut consumer = Consumer::new("mycategory");
 
-        consumer.tick();
+        let _ = consumer.tick();
 
         let get = consumer.get();
 
@@ -186,7 +185,7 @@ mod tests {
         let messages_count = messages.len() as u64;
         get.queue_messages(&messages);
 
-        consumer.tick();
+        let _ = consumer.tick();
 
         let get = consumer.get();
 
@@ -294,7 +293,7 @@ mod tests {
         let messages_count = messages.len() as u64;
         get.queue_messages(&messages);
 
-        consumer.tick();
+        let _ = consumer.tick();
 
         assert_eq!(handler.message_count(), messages_count);
     }
@@ -308,7 +307,7 @@ mod tests {
         let messages = controls::messages::example();
         get.queue_messages(&messages);
 
-        consumer.tick();
+        let _ = consumer.tick();
 
         let only_one_message_handled = 1;
         assert_eq!(handler.message_count(), only_one_message_handled);
