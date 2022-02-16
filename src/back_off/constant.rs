@@ -9,7 +9,8 @@ pub struct ConstantBackOff {
 impl ConstantBackOff {
     pub fn new() -> Self {
         Self {
-            duration: Duration::from_millis(10),
+            // Chosen to allow test to run quickly but still have some back off
+            duration: Duration::from_millis(1),
         }
     }
 
@@ -19,7 +20,7 @@ impl ConstantBackOff {
 
     pub fn build() -> Self {
         Self {
-            duration: Duration::from_millis(100),
+            duration: Duration::from_millis(100), //TODO: Arbitrarily chosen, verify this makes sense or change
         }
     }
 }

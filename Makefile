@@ -8,6 +8,18 @@ test:
 install-test:
 	cargo install cargo-nextest
 
+.PHONY: cl
+cl:
+	cargo clean
+
+.PHONY: c
+c:
+	cargo check
+
+.PHONY: cr
+cr:
+	cargo check --release
+
 .PHONY: b
 b:
 	cargo build

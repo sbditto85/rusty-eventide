@@ -199,12 +199,13 @@ mod tests {
     // Is this a good test? idk, feels a little like imperative shell to me
     #[test]
     fn should_continue_tick_until_stopped() {
+        let wait_millis = 5;
         let mut consumer = Consumer::new("mycategory").start();
 
         assert!(consumer.started());
         let beginning = consumer.iterations();
 
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(wait_millis));
 
         consumer.stop();
         assert!(consumer.stopped());
@@ -212,7 +213,7 @@ mod tests {
         let ending = consumer.iterations();
         assert!(ending > beginning);
 
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(wait_millis));
 
         assert_eq!(ending, consumer.iterations());
     }
@@ -221,22 +222,55 @@ mod tests {
     #[ignore]
     fn should_be_able_to_wait_until_consumer_is_done() {}
 
+    #[test]
+    #[ignore]
+    fn should_stop_processing_messages_when_handler_errors_on_start() {
+        let handler = controls::handler::FailingHandler::build();
+        let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
+
+        let get = consumer.get_mut();
+        let messages = controls::messages::example();
+        get.queue_messages(&messages);
+
+        let back_off = consumer.back_off.duration(1);
+
+        let mut consumer = consumer.start();
+
+        assert!(consumer.started());
+
+        std::thread::sleep(back_off);
+
+        consumer.stop();
+        assert!(consumer.stopped());
+
+        assert_eq!(consumer.iterations(), 1);
+        assert_eq!(handler.message_count(), 1);
+    }
+
     /////////////////////
     // Back off
     /////////////////////
 
     #[test]
     fn should_be_able_to_specify_a_back_off_strategy() {
-        let duration = std::time::Duration::from_millis(60);
+        // Choosing a small millis that still allows back off, but short test time
+        let duration_millis = 6;
+        let thread_sleep_duration_millis = duration_millis - 2; // Give a little millis buffer
 
         let mut consumer = Consumer::new("mycategory")
-            .with_back_off(crate::back_off::constant::ConstantBackOff::new_with_duration(duration))
+            .with_back_off(
+                crate::back_off::constant::ConstantBackOff::new_with_duration(
+                    std::time::Duration::from_millis(duration_millis),
+                ),
+            )
             .start();
 
         assert!(consumer.started());
         let beginning = consumer.iterations();
 
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(
+            thread_sleep_duration_millis,
+        ));
 
         consumer.stop();
         assert!(consumer.stopped());
@@ -249,10 +283,15 @@ mod tests {
 
     #[test]
     fn should_be_able_to_use_last_message_count_to_determine_back_off() {
-        let duration = std::time::Duration::from_millis(60);
+        // Picking a small back off time that is still longer then the wait time
+        let duration_millis = 6;
+        let thread_sleep_duration_millis = duration_millis - 2; // Give a little millis buffer
 
-        let mut consumer = Consumer::new("mycategory")
-            .with_back_off(crate::controls::back_off::OnNoMessageCount::new(duration));
+        let mut consumer = Consumer::new("mycategory").with_back_off(
+            crate::controls::back_off::OnNoMessageCount::new(std::time::Duration::from_millis(
+                duration_millis,
+            )),
+        );
 
         let get = consumer.get_mut();
         let messages = controls::messages::example();
@@ -263,7 +302,9 @@ mod tests {
         assert!(consumer.started());
         let beginning = consumer.iterations();
 
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(
+            thread_sleep_duration_millis,
+        ));
 
         consumer.stop();
         assert!(consumer.stopped());
@@ -274,10 +315,6 @@ mod tests {
         let expected_ending = beginning + 2;
         assert_eq!(expected_ending, ending);
     }
-
-    #[test]
-    #[ignore]
-    fn should_stop_processing_messages_when_handler_errors_on_start() {}
 
     /////////////////////
     // Handler
