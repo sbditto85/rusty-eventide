@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use back_off::{constant::ConstantBackOff, BackOff};
-use controls::handler;
+// use controls::handler;
 use messaging::{postgres::Category, *};
 use settings::*;
 
@@ -159,7 +159,7 @@ impl<G: Get, B: BackOff> ConsumerHandler<G, B> {
     }
 
     /// Will run until completion if you need to run again start a new consumer
-    pub fn wait(&mut self) -> Result<(), HandleError> {
+    pub fn wait(mut self) -> Result<(), HandleError> {
         if let Some(handle) = self.handle.take() {
             handle.join().expect("thread to join")
         } else {
@@ -239,7 +239,7 @@ mod tests {
         let messages = controls::messages::example();
         get.queue_messages(&messages);
 
-        let mut consumer = consumer.start();
+        let consumer = consumer.start();
 
         let result = consumer.wait();
 
@@ -280,7 +280,7 @@ mod tests {
     fn should_be_able_to_specify_a_back_off_strategy() {
         // Choosing a small millis that still allows back off, but short test time
         let duration_millis = 6;
-        let thread_sleep_duration_millis = duration_millis - 2; // Give a little millis buffer
+        let thread_sleep_duration_millis = duration_millis / 2; // Give a little millis buffer
 
         let mut consumer = Consumer::new("mycategory")
             .with_back_off(
@@ -310,7 +310,7 @@ mod tests {
     fn should_be_able_to_use_last_message_count_to_determine_back_off() {
         // Picking a small back off time that is still longer then the wait time
         let duration_millis = 6;
-        let thread_sleep_duration_millis = duration_millis - 2; // Give a little millis buffer
+        let thread_sleep_duration_millis = duration_millis / 2; // Give a little millis buffer
 
         let mut consumer = Consumer::new("mycategory").with_back_off(
             crate::controls::back_off::OnNoMessageCount::new(std::time::Duration::from_millis(
