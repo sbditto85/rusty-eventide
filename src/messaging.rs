@@ -13,7 +13,7 @@ pub struct Message;
 #[derive(Error, Debug)]
 pub enum HandleError {
     #[error("Error in handler code {0}")]
-    HandlerError(#[from] Box<dyn StdError>),
+    HandlerError(#[from] Box<dyn StdError + Send>),
 }
 
 pub trait Handler {

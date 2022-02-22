@@ -49,7 +49,7 @@ impl Handler for FailingHandler {
         let mut count = self.count.lock().expect("mutex to not be poisoned");
         *count += 1;
 
-        Err((Box::new(FailingHandlerError::Forced) as Box<dyn StdError>).into())
+        Err((Box::new(FailingHandlerError::Forced) as Box<dyn StdError + Send>).into())
     }
 }
 

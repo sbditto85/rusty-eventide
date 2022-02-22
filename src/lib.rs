@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use back_off::{constant::ConstantBackOff, BackOff};
+use controls::handler;
 use messaging::{postgres::Category, *};
 use settings::*;
 
@@ -74,17 +75,15 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
         let arc = Arc::new(Mutex::new(self));
         let thread_arc = arc.clone();
 
-        let handle = std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || -> Result<(), HandleError> {
             loop {
                 let mut consumer = thread_arc.lock().expect("the mutex to not be poisoned");
 
                 if !consumer.deref().active {
-                    break;
+                    break Ok(());
                 }
 
-                let iteration_message_count = consumer
-                    .tick()
-                    .expect("me to write a test to force this to be handled"); //TODO: handle this test
+                let iteration_message_count = consumer.tick()?;
 
                 let wait_time = consumer.back_off.duration(iteration_message_count);
 
@@ -122,11 +121,14 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
 
 pub struct ConsumerHandler<G: Get, B: BackOff> {
     consumer: Arc<Mutex<Consumer<G, B>>>,
-    handle: Option<JoinHandle<()>>,
+    handle: Option<JoinHandle<Result<(), HandleError>>>,
 }
 
 impl<G: Get, B: BackOff> ConsumerHandler<G, B> {
-    pub fn new(consumer: Arc<Mutex<Consumer<G, B>>>, handle: JoinHandle<()>) -> Self {
+    pub fn new(
+        consumer: Arc<Mutex<Consumer<G, B>>>,
+        handle: JoinHandle<Result<(), HandleError>>,
+    ) -> Self {
         Self {
             consumer,
             handle: Some(handle),
@@ -154,6 +156,15 @@ impl<G: Get, B: BackOff> ConsumerHandler<G, B> {
     pub fn stopped(&self) -> bool {
         let consumer = self.consumer.lock().expect("mutex to not be poisoned");
         !consumer.active
+    }
+
+    /// Will run until completion if you need to run again start a new consumer
+    pub fn wait(&mut self) -> Result<(), HandleError> {
+        if let Some(handle) = self.handle.take() {
+            handle.join().expect("thread to join")
+        } else {
+            Ok(()) //TODO: is this right?
+        }
     }
 }
 
@@ -219,8 +230,22 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn should_be_able_to_wait_until_consumer_is_done() {}
+    fn should_be_able_to_wait_until_consumer_is_done() {
+        let handler = controls::handler::FailingHandler::build();
+        let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
+
+        // Add messages so handler fails and consumer stops
+        let get = consumer.get_mut();
+        let messages = controls::messages::example();
+        get.queue_messages(&messages);
+
+        let mut consumer = consumer.start();
+
+        let result = consumer.wait();
+
+        assert!(result.is_err());
+        assert_eq!(handler.message_count(), 1);
+    }
 
     #[test]
     #[ignore]
