@@ -5,50 +5,57 @@ use std::thread::JoinHandle;
 use back_off::{constant::ConstantBackOff, BackOff};
 // use controls::handler;
 use messaging::{postgres::Category, *};
+use run_time::{RunTime, SubstituteRunTime, SystemRunTime};
 use settings::*;
 
 pub mod back_off;
 pub mod controls;
 pub mod messaging;
+pub mod run_time;
 pub mod settings;
 
-pub struct Consumer<G: Get, B: BackOff> {
+pub struct Consumer<G: Get, B: BackOff, R: RunTime> {
+    run_time: R,
     #[allow(dead_code)]
     category: String,
     handlers: Vec<Box<dyn Handler + Send>>,
-    active: bool,
-    iterations: u64,
+    active: Arc<Mutex<bool>>,
+    iterations: Arc<Mutex<u64>>,
     get: G,
     back_off: B,
 }
 
-impl Consumer<SubstituteGetter, ConstantBackOff> {
-    pub fn new(category: &str) -> Consumer<SubstituteGetter, ConstantBackOff> {
+impl Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime> {
+    pub fn new(category: &str) -> Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime> {
         Consumer {
+            run_time: SubstituteRunTime::new(),
             category: category.to_string(),
             handlers: Vec::new(),
-            active: true,
-            iterations: 0,
+            active: Arc::new(Mutex::new(true)),
+            iterations: Arc::new(Mutex::new(0)),
             get: SubstituteGetter::new(category),
             back_off: ConstantBackOff::new(),
         }
     }
 }
 
-impl Consumer<Category, ConstantBackOff> {
-    pub fn build(category: &str) -> Consumer<Category, ConstantBackOff> {
+impl Consumer<Category, ConstantBackOff, SystemRunTime> {
+    pub fn build(category: &str) -> Consumer<Category, ConstantBackOff, SystemRunTime> {
         Consumer {
+            run_time: SystemRunTime::build(),
             category: category.to_string(),
             handlers: Vec::new(),
-            active: true,
-            iterations: 0,
+            active: Arc::new(Mutex::new(true)),
+            iterations: Arc::new(Mutex::new(0)),
             get: Category,
             back_off: ConstantBackOff::build(),
         }
     }
 }
 
-impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
+impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + 'static>
+    Consumer<G, B, R>
+{
     pub fn add_handler<H: messaging::Handler + Send + 'static>(mut self, handler: H) -> Self {
         self.handlers.push(Box::new(handler));
         self
@@ -58,10 +65,11 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
         self
     }
 
-    pub fn with_back_off<B2: BackOff>(self, back_off: B2) -> Consumer<G, B2> {
+    pub fn with_back_off<B2: BackOff>(self, back_off: B2) -> Consumer<G, B2, R> {
         // Is there a better way to do this? where I only have to specify back_off?
         // can't use `..self` because B and B2 are different types :(
         Consumer {
+            run_time: self.run_time,
             category: self.category,
             handlers: self.handlers,
             active: self.active,
@@ -71,33 +79,37 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
         }
     }
 
-    pub fn start(self) -> ConsumerHandler<G, B> {
-        let arc = Arc::new(Mutex::new(self));
-        let thread_arc = arc.clone();
+    pub fn start(mut self) -> ConsumerHandle {
+        let active = self.active.clone();
+        let iterations = self.iterations.clone();
 
         let handle = std::thread::spawn(move || -> Result<(), HandleError> {
-            loop {
-                let mut consumer = thread_arc.lock().expect("the mutex to not be poisoned");
+            let mut should_continue = true;
+            while should_continue {
+                let active = self.active.lock().expect("mutex to not be poisoned");
 
-                if !consumer.deref().active {
-                    break Ok(());
+                if !active.deref() {
+                    break;
                 }
-
-                let iteration_message_count = consumer.tick()?;
-
-                let wait_time = consumer.back_off.duration(iteration_message_count);
-
                 // Give the main thread a chance to lock the mutex
-                drop(consumer);
-                std::thread::sleep(wait_time);
+                drop(active);
+
+                let iteration_message_count = self.tick()?;
+
+                let wait_time = self.back_off.duration(iteration_message_count);
+
+                self.run_time.sleep(wait_time);
+                should_continue = self.run_time.should_continue();
             }
+            Ok(())
         });
 
-        ConsumerHandler::new(arc.clone(), handle)
+        ConsumerHandle::build(active, iterations, handle)
     }
 
     pub fn tick(&mut self) -> Result<u64, HandleError> {
-        self.iterations += 1;
+        let mut iterations = self.iterations.lock().expect("mutex to not be poisoned");
+        *iterations += 1;
         let messages = self.get.get(0); //TODO: handle position
         let messages_length = messages.len();
 
@@ -117,45 +129,50 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
     pub fn get_mut(&mut self) -> &mut G {
         &mut self.get
     }
+
+    pub fn run_time_mut(&mut self) -> &mut R {
+        &mut self.run_time
+    }
 }
 
-pub struct ConsumerHandler<G: Get, B: BackOff> {
-    consumer: Arc<Mutex<Consumer<G, B>>>,
+pub struct ConsumerHandle {
+    active: Arc<Mutex<bool>>,
+    iterations: Arc<Mutex<u64>>,
     handle: Option<JoinHandle<Result<(), HandleError>>>,
 }
 
-impl<G: Get, B: BackOff> ConsumerHandler<G, B> {
-    pub fn new(
-        consumer: Arc<Mutex<Consumer<G, B>>>,
+impl ConsumerHandle {
+    pub fn build(
+        active: Arc<Mutex<bool>>,
+        iterations: Arc<Mutex<u64>>,
         handle: JoinHandle<Result<(), HandleError>>,
     ) -> Self {
         Self {
-            consumer,
+            active,
+            iterations,
             handle: Some(handle),
         }
     }
 
     pub fn iterations(&self) -> u64 {
-        let consumer = self.consumer.lock().expect("mutex to not be poisoned");
-        consumer.iterations
+        *self.iterations.lock().expect("mutex to not be poisoned")
     }
 
     pub fn stop(&mut self) {
-        let mut consumer = self.consumer.lock().expect("mutex to not be poisoned");
-        consumer.active = false;
-        drop(consumer);
+        let mut active = self.active.lock().expect("mutex to not be poisoned");
+        *active = false;
+        // Allow runner to get mutex
+        drop(active);
 
         self.handle.take().map(|thread| thread.join());
     }
 
     pub fn started(&self) -> bool {
-        let consumer = self.consumer.lock().expect("mutex to not be poisoned");
-        consumer.active
+        *self.active.lock().expect("mutex to not be poisoned")
     }
 
     pub fn stopped(&self) -> bool {
-        let consumer = self.consumer.lock().expect("mutex to not be poisoned");
-        !consumer.active
+        !*self.active.lock().expect("mutex to not be poisoned")
     }
 
     /// Will run until completion if you need to run again start a new consumer
@@ -210,7 +227,7 @@ mod tests {
     // Is this a good test? idk, feels a little like imperative shell to me
     #[test]
     fn should_continue_tick_until_stopped() {
-        let wait_millis = 5;
+        let wait_millis = 15;
         let mut consumer = Consumer::new("mycategory").start();
 
         assert!(consumer.started());
@@ -279,28 +296,26 @@ mod tests {
     #[test]
     fn should_be_able_to_specify_a_back_off_strategy() {
         // Choosing a small millis that still allows back off, but short test time
-        let duration_millis = 6;
-        let thread_sleep_duration_millis = duration_millis / 2; // Give a little millis buffer
+        let duration = 8;
+        let thread_sleep_duration = duration - 2;
 
-        let mut consumer = Consumer::new("mycategory")
-            .with_back_off(
-                crate::back_off::constant::ConstantBackOff::new_with_duration(
-                    std::time::Duration::from_millis(duration_millis),
-                ),
-            )
-            .start();
+        let mut consumer = Consumer::new("mycategory").with_back_off(
+            crate::back_off::constant::ConstantBackOff::new_with_duration(
+                std::time::Duration::from_millis(duration),
+            ),
+        );
 
-        assert!(consumer.started());
-        let beginning = consumer.iterations();
+        consumer.run_time_mut().set_run_limit(thread_sleep_duration);
 
-        std::thread::sleep(std::time::Duration::from_millis(
-            thread_sleep_duration_millis,
-        ));
+        let mut consumer_handle = consumer.start();
 
-        consumer.stop();
-        assert!(consumer.stopped());
+        assert!(consumer_handle.started());
+        let beginning = consumer_handle.iterations();
 
-        let ending = consumer.iterations();
+        consumer_handle.stop();
+        assert!(consumer_handle.stopped());
+
+        let ending = consumer_handle.iterations();
         // Only enough time to get one iteration off due to back off being longer then test sleep
         let expected_ending = beginning + 1;
         assert_eq!(expected_ending, ending);
@@ -309,8 +324,8 @@ mod tests {
     #[test]
     fn should_be_able_to_use_last_message_count_to_determine_back_off() {
         // Picking a small back off time that is still longer then the wait time
-        let duration_millis = 6;
-        let thread_sleep_duration_millis = duration_millis / 2; // Give a little millis buffer
+        let duration_millis = 20;
+        let thread_sleep_duration_millis = duration_millis - (duration_millis / 4); // Give a little millis buffer
 
         let mut consumer = Consumer::new("mycategory").with_back_off(
             crate::controls::back_off::OnNoMessageCount::new(std::time::Duration::from_millis(
