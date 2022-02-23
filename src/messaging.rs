@@ -14,6 +14,8 @@ pub struct Message;
 pub enum HandleError {
     #[error("Error in handler code {0}")]
     HandlerError(#[from] Box<dyn StdError + Send>),
+    #[error("Missing Handler")]
+    MissingHandler,
 }
 
 pub trait Handler {

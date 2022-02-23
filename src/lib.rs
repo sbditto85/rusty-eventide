@@ -79,11 +79,11 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + '
         }
     }
 
-    pub fn start(mut self) -> ConsumerHandle {
+    pub fn start(mut self) -> ConsumerHandle<G, B, R> {
         let active = self.active.clone();
         let iterations = self.iterations.clone();
 
-        let handle = std::thread::spawn(move || -> Result<(), HandleError> {
+        let handle = std::thread::spawn(move || -> Result<Consumer<G, B, R>, HandleError> {
             let mut should_continue = true;
             while should_continue {
                 let active = self.active.lock().expect("mutex to not be poisoned");
@@ -101,10 +101,18 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + '
                 self.run_time.sleep(wait_time);
                 should_continue = self.run_time.should_continue();
             }
-            Ok(())
+            Ok(self)
         });
 
         ConsumerHandle::build(active, iterations, handle)
+    }
+
+    pub fn stopped(&self) -> bool {
+        !*self.active.lock().expect("mutex to not be poisoned")
+    }
+
+    pub fn iterations(&self) -> u64 {
+        *self.iterations.lock().expect("mutex to not be poisoned")
     }
 
     pub fn tick(&mut self) -> Result<u64, HandleError> {
@@ -135,17 +143,17 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + '
     }
 }
 
-pub struct ConsumerHandle {
+pub struct ConsumerHandle<G: Get, B: BackOff, R: RunTime> {
     active: Arc<Mutex<bool>>,
     iterations: Arc<Mutex<u64>>,
-    handle: Option<JoinHandle<Result<(), HandleError>>>,
+    handle: Option<JoinHandle<Result<Consumer<G, B, R>, HandleError>>>,
 }
 
-impl ConsumerHandle {
+impl<G: Get, B: BackOff, R: RunTime> ConsumerHandle<G, B, R> {
     pub fn build(
         active: Arc<Mutex<bool>>,
         iterations: Arc<Mutex<u64>>,
-        handle: JoinHandle<Result<(), HandleError>>,
+        handle: JoinHandle<Result<Consumer<G, B, R>, HandleError>>,
     ) -> Self {
         Self {
             active,
@@ -176,11 +184,11 @@ impl ConsumerHandle {
     }
 
     /// Will run until completion if you need to run again start a new consumer
-    pub fn wait(mut self) -> Result<(), HandleError> {
+    pub fn wait(mut self) -> Result<Consumer<G, B, R>, HandleError> {
         if let Some(handle) = self.handle.take() {
             handle.join().expect("thread to join")
         } else {
-            Ok(()) //TODO: is this right?
+            Err(HandleError::MissingHandler) //TODO: is this right?
         }
     }
 }
@@ -305,17 +313,21 @@ mod tests {
             ),
         );
 
-        consumer.run_time_mut().set_run_limit(thread_sleep_duration);
+        consumer
+            .run_time_mut()
+            .set_run_limit(std::time::Duration::from_millis(thread_sleep_duration));
 
         let mut consumer_handle = consumer.start();
 
         assert!(consumer_handle.started());
         let beginning = consumer_handle.iterations();
 
-        consumer_handle.stop();
-        assert!(consumer_handle.stopped());
+        let consumer = consumer_handle
+            .wait()
+            .expect("waiting for handler to succeed");
+        assert!(consumer.stopped());
 
-        let ending = consumer_handle.iterations();
+        let ending = consumer.iterations();
         // Only enough time to get one iteration off due to back off being longer then test sleep
         let expected_ending = beginning + 1;
         assert_eq!(expected_ending, ending);
@@ -337,14 +349,16 @@ mod tests {
         let messages = controls::messages::example();
         get.queue_messages(&messages);
 
+        consumer
+            .run_time_mut()
+            .set_run_limit(std::time::Duration::from_millis(
+                thread_sleep_duration_millis,
+            ));
+
         let mut consumer = consumer.start();
 
         assert!(consumer.started());
         let beginning = consumer.iterations();
-
-        std::thread::sleep(std::time::Duration::from_millis(
-            thread_sleep_duration_millis,
-        ));
 
         consumer.stop();
         assert!(consumer.stopped());
