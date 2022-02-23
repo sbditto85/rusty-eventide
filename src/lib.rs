@@ -91,20 +91,31 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + '
                 if !active.deref() {
                     break;
                 }
+
                 // Give the main thread a chance to lock the mutex
                 drop(active);
 
-                let iteration_message_count = self.tick()?;
+                let iteration_message_count = self.tick().map_err(|error| {
+                    self.set_inactive();
+                    error
+                })?;
 
                 let wait_time = self.back_off.duration(iteration_message_count);
 
                 self.run_time.sleep(wait_time);
                 should_continue = self.run_time.should_continue();
             }
+
+            self.set_inactive();
             Ok(self)
         });
 
         ConsumerHandle::build(active, iterations, handle)
+    }
+
+    fn set_inactive(&mut self) {
+        let mut active = self.active.lock().expect("mutex to not be poisoned");
+        *active = false;
     }
 
     pub fn stopped(&self) -> bool {
@@ -247,7 +258,12 @@ mod tests {
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();
-        assert!(ending > beginning);
+        assert!(
+            ending > beginning,
+            "Beginning: {} should be less than Ending: {}",
+            beginning,
+            ending
+        );
 
         std::thread::sleep(std::time::Duration::from_millis(wait_millis));
 
@@ -317,7 +333,7 @@ mod tests {
             .run_time_mut()
             .set_run_limit(std::time::Duration::from_millis(thread_sleep_duration));
 
-        let mut consumer_handle = consumer.start();
+        let consumer_handle = consumer.start();
 
         assert!(consumer_handle.started());
         let beginning = consumer_handle.iterations();
@@ -337,7 +353,7 @@ mod tests {
     fn should_be_able_to_use_last_message_count_to_determine_back_off() {
         // Picking a small back off time that is still longer then the wait time
         let duration_millis = 20;
-        let thread_sleep_duration_millis = duration_millis - (duration_millis / 4); // Give a little millis buffer
+        let max_run_duration_millis = duration_millis - (duration_millis / 4); // Give a little millis buffer
 
         let mut consumer = Consumer::new("mycategory").with_back_off(
             crate::controls::back_off::OnNoMessageCount::new(std::time::Duration::from_millis(
@@ -351,16 +367,16 @@ mod tests {
 
         consumer
             .run_time_mut()
-            .set_run_limit(std::time::Duration::from_millis(
-                thread_sleep_duration_millis,
-            ));
+            .set_run_limit(std::time::Duration::from_millis(max_run_duration_millis));
 
-        let mut consumer = consumer.start();
+        let consumer_handle = consumer.start();
 
-        assert!(consumer.started());
-        let beginning = consumer.iterations();
+        std::thread::sleep(std::time::Duration::from_millis(10)); // Allow consumer thread to start
 
-        consumer.stop();
+        assert!(consumer_handle.started());
+        let beginning = consumer_handle.iterations();
+
+        let consumer = consumer_handle.wait().expect("wait to finish successfully");
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();

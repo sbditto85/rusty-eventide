@@ -20,8 +20,7 @@ impl SubstituteRunTime {
 
 impl RunTime for SubstituteRunTime {
     fn sleep(&mut self, duration: Duration) {
-        self.run_limit = self.run_limit.map(|limit| limit - duration);
-        println!("RUN_LIMIT: {:?}", self.run_limit);
+        self.run_limit = self.run_limit.map(|limit| limit.saturating_sub(duration));
     }
 
     fn set_run_limit(&mut self, total_run_time: Duration) {
@@ -30,7 +29,7 @@ impl RunTime for SubstituteRunTime {
 
     fn should_continue(&mut self) -> bool {
         if let Some(run_limit) = &self.run_limit {
-            *run_limit >= Duration::from_millis(0)
+            *run_limit > Duration::ZERO
         } else {
             true
         }
