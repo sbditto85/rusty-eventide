@@ -1,4 +1,3 @@
-use std::error::Error as StdError;
 use std::sync::{Arc, Mutex};
 
 use thiserror::Error;
@@ -49,7 +48,7 @@ impl Handler for FailingHandler {
         let mut count = self.count.lock().expect("mutex to not be poisoned");
         *count += 1;
 
-        Err((Box::new(FailingHandlerError::Forced) as Box<dyn StdError + Send>).into())
+        Err(Box::new(FailingHandlerError::Forced).into())
     }
 }
 

@@ -18,6 +18,12 @@ pub enum HandleError {
     MissingHandler,
 }
 
+impl<E: StdError + Send + 'static> From<Box<E>> for HandleError {
+    fn from(error: Box<E>) -> Self {
+        HandleError::HandlerError(error)
+    }
+}
+
 pub trait Handler {
     fn handle(&mut self, message: Message) -> Result<(), HandleError>;
 }
