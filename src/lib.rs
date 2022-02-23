@@ -294,7 +294,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_stop_processing_messages_when_handler_errors_on_start() {
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
@@ -303,19 +302,30 @@ mod tests {
         let messages = controls::messages::example();
         get.queue_messages(&messages);
 
-        let back_off = consumer.back_off.duration(1);
+        let consumer_handle = consumer.start();
 
-        let mut consumer = consumer.start();
+        let iterations = consumer_handle.iterations.clone();
 
-        assert!(consumer.started());
+        let consumer_result = consumer_handle.wait();
+        assert!(consumer_result.is_err());
 
-        std::thread::sleep(back_off);
+        let actual_iterations = *iterations.lock().expect("mutex to not be poisoned");
 
-        consumer.stop();
-        assert!(consumer.stopped());
+        let expected_iterations = 1;
+        let expected_message_count = 1;
 
-        assert_eq!(consumer.iterations(), 1);
-        assert_eq!(handler.message_count(), 1);
+        assert_eq!(
+            actual_iterations, expected_iterations,
+            "iterations ({}) should be {}",
+            actual_iterations, expected_iterations
+        );
+        assert_eq!(
+            handler.message_count(),
+            expected_message_count,
+            "message count ({}) should be {}",
+            handler.message_count(),
+            expected_message_count
+        );
     }
 
     /////////////////////
@@ -348,7 +358,7 @@ mod tests {
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();
-        // Only enough time to get one iteration off due to back off being longer then test sleep
+        // Only enough time to get one iteration off due to back off being longer then max run time
         let expected_ending = 1;
         assert_eq!(expected_ending, ending);
     }
