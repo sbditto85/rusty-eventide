@@ -126,9 +126,14 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + '
         *self.iterations.lock().expect("mutex to not be poisoned")
     }
 
-    pub fn tick(&mut self) -> Result<u64, HandleError> {
+    fn increment_iterations(&mut self) {
         let mut iterations = self.iterations.lock().expect("mutex to not be poisoned");
         *iterations += 1;
+    }
+
+    pub fn tick(&mut self) -> Result<u64, HandleError> {
+        self.increment_iterations();
+
         let messages = self.get.get(0); //TODO: handle position
         let messages_length = messages.len();
 
@@ -320,23 +325,22 @@ mod tests {
     #[test]
     fn should_be_able_to_specify_a_back_off_strategy() {
         // Choosing a small millis that still allows back off, but short test time
-        let duration = 8;
-        let thread_sleep_duration = duration - 2;
+        let duration_millis = 8;
+        let max_run_time_duration_millis = duration_millis - 2;
 
         let mut consumer = Consumer::new("mycategory").with_back_off(
             crate::back_off::constant::ConstantBackOff::new_with_duration(
-                std::time::Duration::from_millis(duration),
+                std::time::Duration::from_millis(duration_millis),
             ),
         );
 
         consumer
             .run_time_mut()
-            .set_run_limit(std::time::Duration::from_millis(thread_sleep_duration));
+            .set_run_limit(std::time::Duration::from_millis(
+                max_run_time_duration_millis,
+            ));
 
         let consumer_handle = consumer.start();
-
-        assert!(consumer_handle.started());
-        let beginning = consumer_handle.iterations();
 
         let consumer = consumer_handle
             .wait()
@@ -345,7 +349,7 @@ mod tests {
 
         let ending = consumer.iterations();
         // Only enough time to get one iteration off due to back off being longer then test sleep
-        let expected_ending = beginning + 1;
+        let expected_ending = 1;
         assert_eq!(expected_ending, ending);
     }
 
@@ -371,18 +375,13 @@ mod tests {
 
         let consumer_handle = consumer.start();
 
-        std::thread::sleep(std::time::Duration::from_millis(10)); // Allow consumer thread to start
-
-        assert!(consumer_handle.started());
-        let beginning = consumer_handle.iterations();
-
         let consumer = consumer_handle.wait().expect("wait to finish successfully");
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();
         // Only enough time to do one iteration with a message then immediately try for another
-        //  which will cause a longer pause then the sleep between begin and end because no messages
-        let expected_ending = beginning + 2;
+        //  which will cause a longer pause then the max_run_duration_millis because no messages
+        let expected_ending = 2;
         assert_eq!(expected_ending, ending);
     }
 

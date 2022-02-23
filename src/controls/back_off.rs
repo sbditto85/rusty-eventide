@@ -15,7 +15,7 @@ impl OnNoMessageCount {
 impl BackOff for OnNoMessageCount {
     fn duration(&mut self, iteration_message_count: u64) -> Duration {
         if iteration_message_count > 0 {
-            Duration::from_millis(0)
+            Duration::ZERO
         } else {
             self.duration
         }
