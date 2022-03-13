@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use crate::back_off::BackOff;
 
+#[derive(Debug)]
 pub struct ConstantBackOff {
     duration: Duration,
 }

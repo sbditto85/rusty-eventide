@@ -1,5 +1,8 @@
-use crate::messaging::Message;
+use crate::messaging::MessageData;
 
-pub fn example() -> Vec<Message> {
-    vec![Message, Message]
+pub fn example() -> Vec<MessageData> {
+    vec![
+        MessageData { global_position: 0 },
+        MessageData { global_position: 1 },
+    ]
 }

@@ -3,6 +3,14 @@
 test:
 	cargo nextest run
 
+.PHONY: examples
+examples:
+	cargo build --example simple_consumer
+
+.PHONY: simple_consumer
+simple_consumer:
+	cargo run --example simple_consumer
+
 
 .PHONY: install-test
 install-test:

@@ -36,6 +36,7 @@ impl RunTime for SubstituteRunTime {
     }
 }
 
+#[derive(Debug)]
 pub struct SystemRunTime {
     run_limit: Option<Duration>,
 }

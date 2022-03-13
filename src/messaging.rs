@@ -8,7 +8,9 @@ pub mod postgres;
 pub use get::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Message;
+pub struct MessageData {
+    pub global_position: u64,
+}
 
 #[derive(Error, Debug)]
 pub enum HandleError {
@@ -24,6 +26,6 @@ impl<E: StdError + Send + 'static> From<Box<E>> for HandleError {
     }
 }
 
-pub trait Handler {
-    fn handle(&mut self, message: Message) -> Result<(), HandleError>;
+pub trait Handler: std::fmt::Debug {
+    fn handle(&mut self, message: MessageData) -> Result<(), HandleError>;
 }

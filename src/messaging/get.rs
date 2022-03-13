@@ -2,23 +2,24 @@ use microserde::json::{Number, Value};
 
 use std::collections::HashMap;
 
-use crate::messaging::Message;
+use crate::messaging::MessageData;
 
 pub trait Get: GetTelemetry {
-    fn get(&mut self, position: i64) -> Vec<Message>;
+    fn get(&mut self, position: i64) -> Vec<MessageData>;
 }
 
 pub trait GetTelemetry {
     fn get_count(&self) -> u64;
     fn record_get(&mut self);
     fn get_messages_count(&self) -> u64;
-    fn record_got_messages(&mut self, messages: &[Message]);
+    fn record_got_messages(&mut self, messages: &[MessageData]);
 }
 
+#[derive(Debug)]
 pub struct SubstituteGetter {
     #[allow(dead_code)]
     category: String,
-    messages: Vec<Message>,
+    messages: Vec<MessageData>,
     telemetry: HashMap<String, Value>,
 }
 
@@ -31,13 +32,13 @@ impl SubstituteGetter {
         }
     }
 
-    pub fn queue_messages(&mut self, messages: &[Message]) {
+    pub fn queue_messages(&mut self, messages: &[MessageData]) {
         self.messages.extend_from_slice(messages)
     }
 }
 
 impl Get for SubstituteGetter {
-    fn get(&mut self, position: i64) -> Vec<Message> {
+    fn get(&mut self, position: i64) -> Vec<MessageData> {
         self.record_get();
         if self.messages.len() > 0 {
             let messages = std::mem::replace(&mut self.messages, Vec::new());
@@ -91,7 +92,7 @@ impl GetTelemetry for SubstituteGetter {
             .unwrap_or(0)
     }
 
-    fn record_got_messages(&mut self, messages: &[Message]) {
+    fn record_got_messages(&mut self, messages: &[MessageData]) {
         let fetched_count = messages.len() as u64;
         self.telemetry
             .entry("get_messages_count".to_string())

@@ -5,16 +5,19 @@ use std::thread::JoinHandle;
 use back_off::{constant::ConstantBackOff, BackOff};
 // use controls::handler;
 use messaging::{postgres::Category, *};
+use position_store::{postgres::PostgresPositionStore, PositionStore, SubstitutePositionStore};
 use run_time::{RunTime, SubstituteRunTime, SystemRunTime};
 use settings::*;
 
 pub mod back_off;
 pub mod controls;
 pub mod messaging;
+pub mod position_store;
 pub mod run_time;
 pub mod settings;
 
-pub struct Consumer<G: Get, B: BackOff, R: RunTime> {
+#[derive(Debug)]
+pub struct Consumer<G: Get, B: BackOff, R: RunTime, P: PositionStore> {
     run_time: R,
     #[allow(dead_code)]
     category: String,
@@ -23,10 +26,16 @@ pub struct Consumer<G: Get, B: BackOff, R: RunTime> {
     iterations: Arc<Mutex<u64>>,
     get: G,
     back_off: B,
+    position_update_counter: u64,
+    position_store: P,
+    settings: Settings,
 }
 
-impl Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime> {
-    pub fn new(category: &str) -> Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime> {
+impl Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime, SubstitutePositionStore> {
+    pub fn new(
+        category: &str,
+    ) -> Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime, SubstitutePositionStore>
+    {
         Consumer {
             run_time: SubstituteRunTime::new(),
             category: category.to_string(),
@@ -35,12 +44,17 @@ impl Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime> {
             iterations: Arc::new(Mutex::new(0)),
             get: SubstituteGetter::new(category),
             back_off: ConstantBackOff::new(),
+            position_update_counter: 0,
+            position_store: SubstitutePositionStore::new(),
+            settings: Settings::new(),
         }
     }
 }
 
-impl Consumer<Category, ConstantBackOff, SystemRunTime> {
-    pub fn build(category: &str) -> Consumer<Category, ConstantBackOff, SystemRunTime> {
+impl Consumer<Category, ConstantBackOff, SystemRunTime, PostgresPositionStore> {
+    pub fn build(
+        category: &str,
+    ) -> Consumer<Category, ConstantBackOff, SystemRunTime, PostgresPositionStore> {
         Consumer {
             run_time: SystemRunTime::build(),
             category: category.to_string(),
@@ -49,23 +63,31 @@ impl Consumer<Category, ConstantBackOff, SystemRunTime> {
             iterations: Arc::new(Mutex::new(0)),
             get: Category,
             back_off: ConstantBackOff::build(),
+            position_update_counter: 0,
+            position_store: PostgresPositionStore::build(),
+            settings: Settings::build(),
         }
     }
 }
 
-impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + 'static>
-    Consumer<G, B, R>
+impl<
+        G: Get + Send + 'static,
+        B: BackOff + Send + 'static,
+        R: RunTime + Send + 'static,
+        P: PositionStore + Send + 'static,
+    > Consumer<G, B, R, P>
 {
     pub fn add_handler<H: messaging::Handler + Send + 'static>(mut self, handler: H) -> Self {
         self.handlers.push(Box::new(handler));
         self
     }
 
-    pub fn with_settings(self, _settings: Settings) -> Self {
+    pub fn with_settings(mut self, settings: Settings) -> Self {
+        self.settings = settings;
         self
     }
 
-    pub fn with_back_off<B2: BackOff>(self, back_off: B2) -> Consumer<G, B2, R> {
+    pub fn with_back_off<B2: BackOff>(self, back_off: B2) -> Consumer<G, B2, R, P> {
         // Is there a better way to do this? where I only have to specify back_off?
         // can't use `..self` because B and B2 are different types :(
         Consumer {
@@ -76,14 +98,18 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + '
             iterations: self.iterations,
             get: self.get,
             back_off,
+            position_update_counter: self.position_update_counter,
+            position_store: self.position_store,
+            settings: self.settings,
         }
     }
 
-    pub fn start(mut self) -> ConsumerHandle<G, B, R> {
+    pub fn start(mut self) -> ConsumerHandle<G, B, R, P> {
         let active = self.active.clone();
         let iterations = self.iterations.clone();
 
-        let handle = std::thread::spawn(move || -> Result<Consumer<G, B, R>, HandleError> {
+        // TODO: Should be controlled by RunTime somehow???
+        let handle = std::thread::spawn(move || -> Result<Consumer<G, B, R, P>, HandleError> {
             let mut should_continue = true;
             while should_continue {
                 let active = self.active.lock().expect("mutex to not be poisoned");
@@ -137,13 +163,30 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + '
         let messages = self.get.get(0); //TODO: handle position
         let messages_length = messages.len();
 
-        for message in messages {
-            for handler in &mut self.handlers {
-                handler.handle(message.clone())?;
-            }
+        for message_data in messages {
+            self.handle_message(message_data)?;
         }
 
         Ok(messages_length as u64)
+    }
+
+    fn handle_message(&mut self, message_data: MessageData) -> Result<(), HandleError> {
+        for handler in &mut self.handlers {
+            handler.handle(message_data.clone())?;
+        }
+
+        self.update_position(message_data.global_position);
+
+        Ok(())
+    }
+
+    fn update_position(&mut self, position: u64) {
+        self.position_update_counter += 1;
+
+        if self.position_update_counter >= self.settings.position_update_interval {
+            self.position_store.put(position);
+            self.position_update_counter = 0;
+        }
     }
 
     pub fn get(&self) -> &G {
@@ -157,19 +200,23 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static, R: RunTime + Send + '
     pub fn run_time_mut(&mut self) -> &mut R {
         &mut self.run_time
     }
+
+    pub fn position_store(&self) -> &P {
+        &self.position_store
+    }
 }
 
-pub struct ConsumerHandle<G: Get, B: BackOff, R: RunTime> {
+pub struct ConsumerHandle<G: Get, B: BackOff, R: RunTime, P: PositionStore> {
     active: Arc<Mutex<bool>>,
     iterations: Arc<Mutex<u64>>,
-    handle: Option<JoinHandle<Result<Consumer<G, B, R>, HandleError>>>,
+    handle: Option<JoinHandle<Result<Consumer<G, B, R, P>, HandleError>>>,
 }
 
-impl<G: Get, B: BackOff, R: RunTime> ConsumerHandle<G, B, R> {
+impl<G: Get, B: BackOff, R: RunTime, P: PositionStore> ConsumerHandle<G, B, R, P> {
     pub fn build(
         active: Arc<Mutex<bool>>,
         iterations: Arc<Mutex<u64>>,
-        handle: JoinHandle<Result<Consumer<G, B, R>, HandleError>>,
+        handle: JoinHandle<Result<Consumer<G, B, R, P>, HandleError>>,
     ) -> Self {
         Self {
             active,
@@ -200,7 +247,7 @@ impl<G: Get, B: BackOff, R: RunTime> ConsumerHandle<G, B, R> {
     }
 
     /// Will run until completion if you need to run again start a new consumer
-    pub fn wait(mut self) -> Result<Consumer<G, B, R>, HandleError> {
+    pub fn wait(mut self) -> Result<Consumer<G, B, R, P>, HandleError> {
         if let Some(handle) = self.handle.take() {
             handle.join().expect("thread to join")
         } else {
@@ -212,6 +259,8 @@ impl<G: Get, B: BackOff, R: RunTime> ConsumerHandle<G, B, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::position_store::PositionStoreTelemetry;
 
     /////////////////////
     // Get
@@ -370,7 +419,7 @@ mod tests {
         let max_run_duration_millis = duration_millis - (duration_millis / 4); // Give a little millis buffer
 
         let mut consumer = Consumer::new("mycategory").with_back_off(
-            crate::controls::back_off::OnNoMessageCount::new(std::time::Duration::from_millis(
+            crate::controls::back_off::OnNoMessageDataCount::new(std::time::Duration::from_millis(
                 duration_millis,
             )),
         );
@@ -433,6 +482,24 @@ mod tests {
     // Position
     /////////////////////
     #[test]
-    #[ignore]
-    fn should_store_position_periodically_to_optimize_resume() {}
+    fn should_store_position_periodically_to_optimize_resume() {
+        let handler = controls::handler::TrackingHandler::build();
+        let mut settings = Settings::new();
+        settings.position_update_interval = 1;
+
+        let mut consumer = Consumer::new("mycategory")
+            .add_handler(handler.clone())
+            .with_settings(settings);
+
+        let get = consumer.get_mut();
+        let messages = controls::messages::example();
+        let messages_count = messages.len() as u64;
+        get.queue_messages(&messages);
+
+        let _ = consumer.tick();
+
+        let position_store = consumer.position_store();
+
+        assert_eq!(position_store.put_count(), messages_count);
+    }
 }
