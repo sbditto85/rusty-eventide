@@ -1,9 +1,8 @@
-use std::error::Error as StdError;
 use std::sync::{Arc, Mutex};
 
 use thiserror::Error;
 
-use crate::messaging::{HandleError, Handler, Message};
+use crate::messaging::{HandleError, Handler, MessageData};
 
 #[derive(Debug, Clone)]
 pub struct TrackingHandler {
@@ -11,7 +10,7 @@ pub struct TrackingHandler {
 }
 
 impl Handler for TrackingHandler {
-    fn handle(&mut self, _message: Message) -> Result<(), HandleError> {
+    fn handle(&mut self, _message: MessageData) -> Result<(), HandleError> {
         let mut count = self.count.lock().expect("mutex to not be poisoned");
         *count += 1;
 
@@ -45,11 +44,11 @@ pub enum FailingHandlerError {
 }
 
 impl Handler for FailingHandler {
-    fn handle(&mut self, _message: Message) -> Result<(), HandleError> {
+    fn handle(&mut self, _message: MessageData) -> Result<(), HandleError> {
         let mut count = self.count.lock().expect("mutex to not be poisoned");
         *count += 1;
 
-        Err((Box::new(FailingHandlerError::Forced) as Box<dyn StdError + Send>).into())
+        Err(Box::new(FailingHandlerError::Forced).into())
     }
 }
 

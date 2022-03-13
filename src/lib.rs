@@ -5,109 +5,188 @@ use std::thread::JoinHandle;
 use back_off::{constant::ConstantBackOff, BackOff};
 // use controls::handler;
 use messaging::{postgres::Category, *};
+use position_store::{postgres::PostgresPositionStore, PositionStore, SubstitutePositionStore};
+use run_time::{RunTime, SubstituteRunTime, SystemRunTime};
 use settings::*;
 
 pub mod back_off;
 pub mod controls;
 pub mod messaging;
+pub mod position_store;
+pub mod run_time;
 pub mod settings;
 
-pub struct Consumer<G: Get, B: BackOff> {
+#[derive(Debug)]
+pub struct Consumer<G: Get, B: BackOff, R: RunTime, P: PositionStore> {
+    run_time: R,
     #[allow(dead_code)]
     category: String,
     handlers: Vec<Box<dyn Handler + Send>>,
-    active: bool,
-    iterations: u64,
+    active: Arc<Mutex<bool>>,
+    iterations: Arc<Mutex<u64>>,
     get: G,
     back_off: B,
+    position_update_counter: u64,
+    position_store: P,
+    settings: Settings,
 }
 
-impl Consumer<SubstituteGetter, ConstantBackOff> {
-    pub fn new(category: &str) -> Consumer<SubstituteGetter, ConstantBackOff> {
+impl Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime, SubstitutePositionStore> {
+    pub fn new(
+        category: &str,
+    ) -> Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime, SubstitutePositionStore>
+    {
         Consumer {
+            run_time: SubstituteRunTime::new(),
             category: category.to_string(),
             handlers: Vec::new(),
-            active: true,
-            iterations: 0,
+            active: Arc::new(Mutex::new(true)),
+            iterations: Arc::new(Mutex::new(0)),
             get: SubstituteGetter::new(category),
             back_off: ConstantBackOff::new(),
+            position_update_counter: 0,
+            position_store: SubstitutePositionStore::new(),
+            settings: Settings::new(),
         }
     }
 }
 
-impl Consumer<Category, ConstantBackOff> {
-    pub fn build(category: &str) -> Consumer<Category, ConstantBackOff> {
+impl Consumer<Category, ConstantBackOff, SystemRunTime, PostgresPositionStore> {
+    pub fn build(
+        category: &str,
+    ) -> Consumer<Category, ConstantBackOff, SystemRunTime, PostgresPositionStore> {
         Consumer {
+            run_time: SystemRunTime::build(),
             category: category.to_string(),
             handlers: Vec::new(),
-            active: true,
-            iterations: 0,
+            active: Arc::new(Mutex::new(true)),
+            iterations: Arc::new(Mutex::new(0)),
             get: Category,
             back_off: ConstantBackOff::build(),
+            position_update_counter: 0,
+            position_store: PostgresPositionStore::build(),
+            settings: Settings::build(),
         }
     }
 }
 
-impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
+impl<
+        G: Get + Send + 'static,
+        B: BackOff + Send + 'static,
+        R: RunTime + Send + 'static,
+        P: PositionStore + Send + 'static,
+    > Consumer<G, B, R, P>
+{
     pub fn add_handler<H: messaging::Handler + Send + 'static>(mut self, handler: H) -> Self {
         self.handlers.push(Box::new(handler));
         self
     }
 
-    pub fn with_settings(self, _settings: Settings) -> Self {
+    pub fn with_settings(mut self, settings: Settings) -> Self {
+        self.settings = settings;
         self
     }
 
-    pub fn with_back_off<B2: BackOff>(self, back_off: B2) -> Consumer<G, B2> {
+    pub fn with_back_off<B2: BackOff>(self, back_off: B2) -> Consumer<G, B2, R, P> {
         // Is there a better way to do this? where I only have to specify back_off?
         // can't use `..self` because B and B2 are different types :(
         Consumer {
+            run_time: self.run_time,
             category: self.category,
             handlers: self.handlers,
             active: self.active,
             iterations: self.iterations,
             get: self.get,
             back_off,
+            position_update_counter: self.position_update_counter,
+            position_store: self.position_store,
+            settings: self.settings,
         }
     }
 
-    pub fn start(self) -> ConsumerHandler<G, B> {
-        let arc = Arc::new(Mutex::new(self));
-        let thread_arc = arc.clone();
+    pub fn start(mut self) -> ConsumerHandle<G, B, R, P> {
+        let active = self.active.clone();
+        let iterations = self.iterations.clone();
 
-        let handle = std::thread::spawn(move || -> Result<(), HandleError> {
-            loop {
-                let mut consumer = thread_arc.lock().expect("the mutex to not be poisoned");
+        // TODO: Should be controlled by RunTime somehow???
+        let handle = std::thread::spawn(move || -> Result<Consumer<G, B, R, P>, HandleError> {
+            let mut should_continue = true;
+            while should_continue {
+                let active = self.active.lock().expect("mutex to not be poisoned");
 
-                if !consumer.deref().active {
-                    break Ok(());
+                if !active.deref() {
+                    break;
                 }
 
-                let iteration_message_count = consumer.tick()?;
-
-                let wait_time = consumer.back_off.duration(iteration_message_count);
-
                 // Give the main thread a chance to lock the mutex
-                drop(consumer);
-                std::thread::sleep(wait_time);
+                drop(active);
+
+                let iteration_message_count = self.tick().map_err(|error| {
+                    self.set_inactive();
+                    error
+                })?;
+
+                let wait_time = self.back_off.duration(iteration_message_count);
+
+                self.run_time.sleep(wait_time);
+                should_continue = self.run_time.should_continue();
             }
+
+            self.set_inactive();
+            Ok(self)
         });
 
-        ConsumerHandler::new(arc.clone(), handle)
+        ConsumerHandle::build(active, iterations, handle)
+    }
+
+    fn set_inactive(&mut self) {
+        let mut active = self.active.lock().expect("mutex to not be poisoned");
+        *active = false;
+    }
+
+    pub fn stopped(&self) -> bool {
+        !*self.active.lock().expect("mutex to not be poisoned")
+    }
+
+    pub fn iterations(&self) -> u64 {
+        *self.iterations.lock().expect("mutex to not be poisoned")
+    }
+
+    fn increment_iterations(&mut self) {
+        let mut iterations = self.iterations.lock().expect("mutex to not be poisoned");
+        *iterations += 1;
     }
 
     pub fn tick(&mut self) -> Result<u64, HandleError> {
-        self.iterations += 1;
+        self.increment_iterations();
+
         let messages = self.get.get(0); //TODO: handle position
         let messages_length = messages.len();
 
-        for message in messages {
-            for handler in &mut self.handlers {
-                handler.handle(message.clone())?;
-            }
+        for message_data in messages {
+            self.handle_message(message_data)?;
         }
 
         Ok(messages_length as u64)
+    }
+
+    fn handle_message(&mut self, message_data: MessageData) -> Result<(), HandleError> {
+        for handler in &mut self.handlers {
+            handler.handle(message_data.clone())?;
+        }
+
+        self.update_position(message_data.global_position);
+
+        Ok(())
+    }
+
+    fn update_position(&mut self, position: u64) {
+        self.position_update_counter += 1;
+
+        if self.position_update_counter >= self.settings.position_update_interval {
+            self.position_store.put(position);
+            self.position_update_counter = 0;
+        }
     }
 
     pub fn get(&self) -> &G {
@@ -117,53 +196,62 @@ impl<G: Get + Send + 'static, B: BackOff + Send + 'static> Consumer<G, B> {
     pub fn get_mut(&mut self) -> &mut G {
         &mut self.get
     }
+
+    pub fn run_time_mut(&mut self) -> &mut R {
+        &mut self.run_time
+    }
+
+    pub fn position_store(&self) -> &P {
+        &self.position_store
+    }
 }
 
-pub struct ConsumerHandler<G: Get, B: BackOff> {
-    consumer: Arc<Mutex<Consumer<G, B>>>,
-    handle: Option<JoinHandle<Result<(), HandleError>>>,
+pub struct ConsumerHandle<G: Get, B: BackOff, R: RunTime, P: PositionStore> {
+    active: Arc<Mutex<bool>>,
+    iterations: Arc<Mutex<u64>>,
+    handle: Option<JoinHandle<Result<Consumer<G, B, R, P>, HandleError>>>,
 }
 
-impl<G: Get, B: BackOff> ConsumerHandler<G, B> {
-    pub fn new(
-        consumer: Arc<Mutex<Consumer<G, B>>>,
-        handle: JoinHandle<Result<(), HandleError>>,
+impl<G: Get, B: BackOff, R: RunTime, P: PositionStore> ConsumerHandle<G, B, R, P> {
+    pub fn build(
+        active: Arc<Mutex<bool>>,
+        iterations: Arc<Mutex<u64>>,
+        handle: JoinHandle<Result<Consumer<G, B, R, P>, HandleError>>,
     ) -> Self {
         Self {
-            consumer,
+            active,
+            iterations,
             handle: Some(handle),
         }
     }
 
     pub fn iterations(&self) -> u64 {
-        let consumer = self.consumer.lock().expect("mutex to not be poisoned");
-        consumer.iterations
+        *self.iterations.lock().expect("mutex to not be poisoned")
     }
 
     pub fn stop(&mut self) {
-        let mut consumer = self.consumer.lock().expect("mutex to not be poisoned");
-        consumer.active = false;
-        drop(consumer);
+        let mut active = self.active.lock().expect("mutex to not be poisoned");
+        *active = false;
+        // Allow runner to get mutex
+        drop(active);
 
         self.handle.take().map(|thread| thread.join());
     }
 
     pub fn started(&self) -> bool {
-        let consumer = self.consumer.lock().expect("mutex to not be poisoned");
-        consumer.active
+        *self.active.lock().expect("mutex to not be poisoned")
     }
 
     pub fn stopped(&self) -> bool {
-        let consumer = self.consumer.lock().expect("mutex to not be poisoned");
-        !consumer.active
+        !*self.active.lock().expect("mutex to not be poisoned")
     }
 
     /// Will run until completion if you need to run again start a new consumer
-    pub fn wait(mut self) -> Result<(), HandleError> {
+    pub fn wait(mut self) -> Result<Consumer<G, B, R, P>, HandleError> {
         if let Some(handle) = self.handle.take() {
             handle.join().expect("thread to join")
         } else {
-            Ok(()) //TODO: is this right?
+            Err(HandleError::MissingHandler) //TODO: is this right?
         }
     }
 }
@@ -171,6 +259,8 @@ impl<G: Get, B: BackOff> ConsumerHandler<G, B> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::position_store::PositionStoreTelemetry;
 
     /////////////////////
     // Get
@@ -210,7 +300,7 @@ mod tests {
     // Is this a good test? idk, feels a little like imperative shell to me
     #[test]
     fn should_continue_tick_until_stopped() {
-        let wait_millis = 5;
+        let wait_millis = 15;
         let mut consumer = Consumer::new("mycategory").start();
 
         assert!(consumer.started());
@@ -222,7 +312,12 @@ mod tests {
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();
-        assert!(ending > beginning);
+        assert!(
+            ending > beginning,
+            "Beginning: {} should be less than Ending: {}",
+            beginning,
+            ending
+        );
 
         std::thread::sleep(std::time::Duration::from_millis(wait_millis));
 
@@ -248,7 +343,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_stop_processing_messages_when_handler_errors_on_start() {
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
@@ -257,19 +351,30 @@ mod tests {
         let messages = controls::messages::example();
         get.queue_messages(&messages);
 
-        let back_off = consumer.back_off.duration(1);
+        let consumer_handle = consumer.start();
 
-        let mut consumer = consumer.start();
+        let iterations = consumer_handle.iterations.clone();
 
-        assert!(consumer.started());
+        let consumer_result = consumer_handle.wait();
+        assert!(consumer_result.is_err());
 
-        std::thread::sleep(back_off);
+        let actual_iterations = *iterations.lock().expect("mutex to not be poisoned");
 
-        consumer.stop();
-        assert!(consumer.stopped());
+        let expected_iterations = 1;
+        let expected_message_count = 1;
 
-        assert_eq!(consumer.iterations(), 1);
-        assert_eq!(handler.message_count(), 1);
+        assert_eq!(
+            actual_iterations, expected_iterations,
+            "iterations ({}) should be {}",
+            actual_iterations, expected_iterations
+        );
+        assert_eq!(
+            handler.message_count(),
+            expected_message_count,
+            "message count ({}) should be {}",
+            handler.message_count(),
+            expected_message_count
+        );
     }
 
     /////////////////////
@@ -279,41 +384,42 @@ mod tests {
     #[test]
     fn should_be_able_to_specify_a_back_off_strategy() {
         // Choosing a small millis that still allows back off, but short test time
-        let duration_millis = 6;
-        let thread_sleep_duration_millis = duration_millis / 2; // Give a little millis buffer
+        let duration_millis = 8;
+        let max_run_time_duration_millis = duration_millis - 2;
 
-        let mut consumer = Consumer::new("mycategory")
-            .with_back_off(
-                crate::back_off::constant::ConstantBackOff::new_with_duration(
-                    std::time::Duration::from_millis(duration_millis),
-                ),
-            )
-            .start();
+        let mut consumer = Consumer::new("mycategory").with_back_off(
+            crate::back_off::constant::ConstantBackOff::new_with_duration(
+                std::time::Duration::from_millis(duration_millis),
+            ),
+        );
 
-        assert!(consumer.started());
-        let beginning = consumer.iterations();
+        consumer
+            .run_time_mut()
+            .set_run_limit(std::time::Duration::from_millis(
+                max_run_time_duration_millis,
+            ));
 
-        std::thread::sleep(std::time::Duration::from_millis(
-            thread_sleep_duration_millis,
-        ));
+        let consumer_handle = consumer.start();
 
-        consumer.stop();
+        let consumer = consumer_handle
+            .wait()
+            .expect("waiting for handler to succeed");
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();
-        // Only enough time to get one iteration off due to back off being longer then test sleep
-        let expected_ending = beginning + 1;
+        // Only enough time to get one iteration off due to back off being longer then max run time
+        let expected_ending = 1;
         assert_eq!(expected_ending, ending);
     }
 
     #[test]
     fn should_be_able_to_use_last_message_count_to_determine_back_off() {
         // Picking a small back off time that is still longer then the wait time
-        let duration_millis = 6;
-        let thread_sleep_duration_millis = duration_millis / 2; // Give a little millis buffer
+        let duration_millis = 20;
+        let max_run_duration_millis = duration_millis - (duration_millis / 4); // Give a little millis buffer
 
         let mut consumer = Consumer::new("mycategory").with_back_off(
-            crate::controls::back_off::OnNoMessageCount::new(std::time::Duration::from_millis(
+            crate::controls::back_off::OnNoMessageDataCount::new(std::time::Duration::from_millis(
                 duration_millis,
             )),
         );
@@ -322,22 +428,19 @@ mod tests {
         let messages = controls::messages::example();
         get.queue_messages(&messages);
 
-        let mut consumer = consumer.start();
+        consumer
+            .run_time_mut()
+            .set_run_limit(std::time::Duration::from_millis(max_run_duration_millis));
 
-        assert!(consumer.started());
-        let beginning = consumer.iterations();
+        let consumer_handle = consumer.start();
 
-        std::thread::sleep(std::time::Duration::from_millis(
-            thread_sleep_duration_millis,
-        ));
-
-        consumer.stop();
+        let consumer = consumer_handle.wait().expect("wait to finish successfully");
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();
         // Only enough time to do one iteration with a message then immediately try for another
-        //  which will cause a longer pause then the sleep between begin and end because no messages
-        let expected_ending = beginning + 2;
+        //  which will cause a longer pause then the max_run_duration_millis because no messages
+        let expected_ending = 2;
         assert_eq!(expected_ending, ending);
     }
 
@@ -379,6 +482,24 @@ mod tests {
     // Position
     /////////////////////
     #[test]
-    #[ignore]
-    fn should_store_position_periodically_to_optimize_resume() {}
+    fn should_store_position_periodically_to_optimize_resume() {
+        let handler = controls::handler::TrackingHandler::build();
+        let mut settings = Settings::new();
+        settings.position_update_interval = 1;
+
+        let mut consumer = Consumer::new("mycategory")
+            .add_handler(handler.clone())
+            .with_settings(settings);
+
+        let get = consumer.get_mut();
+        let messages = controls::messages::example();
+        let messages_count = messages.len() as u64;
+        get.queue_messages(&messages);
+
+        let _ = consumer.tick();
+
+        let position_store = consumer.position_store();
+
+        assert_eq!(position_store.put_count(), messages_count);
+    }
 }

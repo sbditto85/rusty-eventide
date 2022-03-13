@@ -1,13 +1,14 @@
 use crate::messaging::{
     get::{Get, GetTelemetry},
-    Message,
+    MessageData,
 };
 
+#[derive(Debug)]
 pub struct Category;
 
 //TODO: actually do this
 impl Get for Category {
-    fn get(&mut self, _position: i64) -> Vec<Message> {
+    fn get(&mut self, _position: i64) -> Vec<MessageData> {
         vec![]
     }
 }
@@ -22,5 +23,5 @@ impl GetTelemetry for Category {
         0
     }
 
-    fn record_got_messages(&mut self, _messages: &[Message]) {}
+    fn record_got_messages(&mut self, _messages: &[MessageData]) {}
 }
