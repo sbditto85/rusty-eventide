@@ -3,6 +3,10 @@
 test:
 	cargo nextest run
 
+.PHONY: tnc
+tnc:
+	RUST_LOG=debug cargo nextest run --no-capture
+
 .PHONY: examples
 examples:
 	cargo build --example simple_consumer

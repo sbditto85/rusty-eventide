@@ -26,6 +26,7 @@ pub struct Consumer<G: Get, B: BackOff, R: RunTime, P: PositionStore> {
     iterations: Arc<Mutex<u64>>,
     get: G,
     back_off: B,
+    position: u64,
     position_update_counter: u64,
     position_store: P,
     settings: Settings,
@@ -44,6 +45,7 @@ impl Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime, SubstitutePo
             iterations: Arc::new(Mutex::new(0)),
             get: SubstituteGetter::new(category),
             back_off: ConstantBackOff::new(),
+            position: 0,
             position_update_counter: 0,
             position_store: SubstitutePositionStore::new(),
             settings: Settings::new(),
@@ -63,6 +65,7 @@ impl Consumer<Category, ConstantBackOff, SystemRunTime, PostgresPositionStore> {
             iterations: Arc::new(Mutex::new(0)),
             get: Category,
             back_off: ConstantBackOff::build(),
+            position: 0, // TODO: have some "default?"
             position_update_counter: 0,
             position_store: PostgresPositionStore::build(),
             settings: Settings::build(),
@@ -98,10 +101,16 @@ impl<
             iterations: self.iterations,
             get: self.get,
             back_off,
+            position: self.position,
             position_update_counter: self.position_update_counter,
             position_store: self.position_store,
             settings: self.settings,
         }
+    }
+
+    pub fn initialize(&mut self) {
+        self.position = self.position_store.get();
+        log::debug!("Starting at position: {}", self.position);
     }
 
     pub fn start(mut self) -> ConsumerHandle<G, B, R, P> {
@@ -110,6 +119,8 @@ impl<
 
         // TODO: Should be controlled by RunTime somehow???
         let handle = std::thread::spawn(move || -> Result<Consumer<G, B, R, P>, HandleError> {
+            self.initialize();
+
             let mut should_continue = true;
             while should_continue {
                 let active = self.active.lock().expect("mutex to not be poisoned");
@@ -160,7 +171,7 @@ impl<
     pub fn tick(&mut self) -> Result<u64, HandleError> {
         self.increment_iterations();
 
-        let messages = self.get.get(0); //TODO: handle position
+        let messages = self.get.get(self.position as i64); //TODO: handle position
         let messages_length = messages.len();
 
         for message_data in messages {
@@ -181,6 +192,8 @@ impl<
     }
 
     fn update_position(&mut self, position: u64) {
+        self.position = position + 1; // Set to get the next one on next fetch
+
         self.position_update_counter += 1;
 
         if self.position_update_counter >= self.settings.position_update_interval {
@@ -203,6 +216,10 @@ impl<
 
     pub fn position_store(&self) -> &P {
         &self.position_store
+    }
+
+    pub fn position_store_mut(&mut self) -> &mut P {
+        &mut self.position_store
     }
 }
 
@@ -262,12 +279,18 @@ mod tests {
 
     use crate::position_store::PositionStoreTelemetry;
 
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     /////////////////////
     // Get
     /////////////////////
 
     #[test]
     fn should_ask_for_messages_every_tick() {
+        init();
+
         let mut consumer = Consumer::new("mycategory");
 
         let _ = consumer.tick();
@@ -279,6 +302,8 @@ mod tests {
 
     #[test]
     fn should_return_same_number_of_queued_messages_on_tick() {
+        init();
+
         let mut consumer = Consumer::new("mycategory");
 
         let get = consumer.get_mut();
@@ -300,6 +325,8 @@ mod tests {
     // Is this a good test? idk, feels a little like imperative shell to me
     #[test]
     fn should_continue_tick_until_stopped() {
+        init();
+
         let wait_millis = 15;
         let mut consumer = Consumer::new("mycategory").start();
 
@@ -326,6 +353,8 @@ mod tests {
 
     #[test]
     fn should_be_able_to_wait_until_consumer_is_done() {
+        init();
+
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
@@ -344,6 +373,8 @@ mod tests {
 
     #[test]
     fn should_stop_processing_messages_when_handler_errors_on_start() {
+        init();
+
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
@@ -383,6 +414,8 @@ mod tests {
 
     #[test]
     fn should_be_able_to_specify_a_back_off_strategy() {
+        init();
+
         // Choosing a small millis that still allows back off, but short test time
         let duration_millis = 8;
         let max_run_time_duration_millis = duration_millis - 2;
@@ -414,6 +447,8 @@ mod tests {
 
     #[test]
     fn should_be_able_to_use_last_message_count_to_determine_back_off() {
+        init();
+
         // Picking a small back off time that is still longer then the wait time
         let duration_millis = 20;
         let max_run_duration_millis = duration_millis - (duration_millis / 4); // Give a little millis buffer
@@ -450,6 +485,8 @@ mod tests {
 
     #[test]
     fn should_offer_messages_to_handler_on_tick() {
+        init();
+
         let handler = controls::handler::TrackingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
@@ -465,6 +502,8 @@ mod tests {
 
     #[test]
     fn should_stop_processing_messages_when_handler_errors_on_tick() {
+        init();
+
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
@@ -483,6 +522,8 @@ mod tests {
     /////////////////////
     #[test]
     fn should_store_position_periodically_to_optimize_resume() {
+        init();
+
         let handler = controls::handler::TrackingHandler::build();
         let mut settings = Settings::new();
         settings.position_update_interval = 1;
@@ -502,4 +543,32 @@ mod tests {
 
         assert_eq!(position_store.put_count(), messages_count);
     }
+
+    #[test]
+    fn should_start_from_stored_position() {
+        init();
+
+        let handler = controls::handler::TrackingHandler::build();
+
+        let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
+
+        let get = consumer.get_mut();
+        let messages = controls::messages::example();
+        let messages_count = messages.len() as u64;
+        get.queue_messages(&messages);
+
+        let position_store = consumer.position_store_mut();
+        position_store.set_position(messages_count);
+
+        consumer.initialize();
+
+        let _ = consumer.tick();
+
+        let no_messages_processed = 0;
+        assert_eq!(handler.message_count(), no_messages_processed);
+    }
+
+    #[test]
+    #[ignore]
+    fn should_start_at_zero_with_no_position_stored() {}
 }
