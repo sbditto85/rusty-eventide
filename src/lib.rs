@@ -306,10 +306,8 @@ mod tests {
 
         let mut consumer = Consumer::new("mycategory");
 
-        let get = consumer.get_mut();
-        let messages = controls::messages::example();
+        let messages = add_messages(&mut consumer);
         let messages_count = messages.len() as u64;
-        get.queue_messages(&messages);
 
         let _ = consumer.tick();
 
@@ -359,9 +357,7 @@ mod tests {
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
         // Add messages so handler fails and consumer stops
-        let get = consumer.get_mut();
-        let messages = controls::messages::example();
-        get.queue_messages(&messages);
+        add_messages(&mut consumer);
 
         let consumer = consumer.start();
 
@@ -378,9 +374,7 @@ mod tests {
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
-        let get = consumer.get_mut();
-        let messages = controls::messages::example();
-        get.queue_messages(&messages);
+        add_messages(&mut consumer);
 
         let consumer_handle = consumer.start();
 
@@ -459,9 +453,7 @@ mod tests {
             )),
         );
 
-        let get = consumer.get_mut();
-        let messages = controls::messages::example();
-        get.queue_messages(&messages);
+        add_messages(&mut consumer);
 
         consumer
             .run_time_mut()
@@ -490,10 +482,8 @@ mod tests {
         let handler = controls::handler::TrackingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
-        let get = consumer.get_mut();
-        let messages = controls::messages::example();
+        let messages = add_messages(&mut consumer);
         let messages_count = messages.len() as u64;
-        get.queue_messages(&messages);
 
         let _ = consumer.tick();
 
@@ -507,9 +497,7 @@ mod tests {
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
-        let get = consumer.get_mut();
-        let messages = controls::messages::example();
-        get.queue_messages(&messages);
+        add_messages(&mut consumer);
 
         let _ = consumer.tick();
 
@@ -532,10 +520,8 @@ mod tests {
             .add_handler(handler.clone())
             .with_settings(settings);
 
-        let get = consumer.get_mut();
-        let messages = controls::messages::example();
+        let messages = add_messages(&mut consumer);
         let messages_count = messages.len() as u64;
-        get.queue_messages(&messages);
 
         let _ = consumer.tick();
 
@@ -552,10 +538,8 @@ mod tests {
 
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
-        let get = consumer.get_mut();
-        let messages = controls::messages::example();
+        let messages = add_messages(&mut consumer);
         let messages_count = messages.len() as u64;
-        get.queue_messages(&messages);
 
         let position_store = consumer.position_store_mut();
         position_store.set_position(messages_count);
@@ -571,4 +555,21 @@ mod tests {
     #[test]
     #[ignore]
     fn should_start_at_zero_with_no_position_stored() {}
+
+    /////////////////////
+    // Helpers
+    /////////////////////
+    fn add_messages<
+        B: BackOff + Send + 'static,
+        R: RunTime + Send + 'static,
+        P: PositionStore + Send + 'static,
+    >(
+        consumer: &mut Consumer<SubstituteGetter, B, R, P>,
+    ) -> Vec<MessageData> {
+        let get = consumer.get_mut();
+        let messages = controls::messages::example();
+        get.queue_messages(&messages);
+
+        messages
+    }
 }
