@@ -291,12 +291,14 @@ mod tests {
     fn should_ask_for_messages_every_tick() {
         init();
 
+        // Arrange
         let mut consumer = Consumer::new("mycategory");
 
+        // Act
         let _ = consumer.tick();
 
+        // Assert
         let get = consumer.get();
-
         assert!(get.get_count() > 0);
     }
 
@@ -304,15 +306,17 @@ mod tests {
     fn should_return_same_number_of_queued_messages_on_tick() {
         init();
 
+        // Arrange
         let mut consumer = Consumer::new("mycategory");
 
         let messages = add_messages(&mut consumer);
         let messages_count = messages.len() as u64;
 
+        // Act
         let _ = consumer.tick();
 
+        // Assert
         let get = consumer.get();
-
         assert_eq!(messages_count, get.get_messages_count());
     }
 
@@ -325,15 +329,21 @@ mod tests {
     fn should_continue_tick_until_stopped() {
         init();
 
+        // Arrange
+        // Act
         let wait_millis = 15;
         let mut consumer = Consumer::new("mycategory").start();
 
+        // Assert
         assert!(consumer.started());
         let beginning = consumer.iterations();
 
+        // Act
         std::thread::sleep(std::time::Duration::from_millis(wait_millis));
 
         consumer.stop();
+
+        // Assert
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();
@@ -344,8 +354,10 @@ mod tests {
             ending
         );
 
+        // Act
         std::thread::sleep(std::time::Duration::from_millis(wait_millis));
 
+        // Assert
         assert_eq!(ending, consumer.iterations());
     }
 
@@ -353,16 +365,18 @@ mod tests {
     fn should_be_able_to_wait_until_consumer_is_done() {
         init();
 
+        // Arrange
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
         // Add messages so handler fails and consumer stops
         add_messages(&mut consumer);
 
+        // Act
         let consumer = consumer.start();
-
         let result = consumer.wait();
 
+        // Assert
         assert!(result.is_err());
         assert_eq!(handler.message_count(), 1);
     }
@@ -371,16 +385,20 @@ mod tests {
     fn should_stop_processing_messages_when_handler_errors_on_start() {
         init();
 
+        // Arrange
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
         add_messages(&mut consumer);
 
+        // Act
         let consumer_handle = consumer.start();
 
         let iterations = consumer_handle.iterations.clone();
 
         let consumer_result = consumer_handle.wait();
+
+        // Assert
         assert!(consumer_result.is_err());
 
         let actual_iterations = *iterations.lock().expect("mutex to not be poisoned");
@@ -410,6 +428,7 @@ mod tests {
     fn should_be_able_to_specify_a_back_off_strategy() {
         init();
 
+        // Arrange
         // Choosing a small millis that still allows back off, but short test time
         let duration_millis = 8;
         let max_run_time_duration_millis = duration_millis - 2;
@@ -426,11 +445,14 @@ mod tests {
                 max_run_time_duration_millis,
             ));
 
+        // Act
         let consumer_handle = consumer.start();
 
         let consumer = consumer_handle
             .wait()
             .expect("waiting for handler to succeed");
+
+        // Assert
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();
@@ -443,6 +465,7 @@ mod tests {
     fn should_be_able_to_use_last_message_count_to_determine_back_off() {
         init();
 
+        // Arrange
         // Picking a small back off time that is still longer then the wait time
         let duration_millis = 20;
         let max_run_duration_millis = duration_millis - (duration_millis / 4); // Give a little millis buffer
@@ -459,9 +482,12 @@ mod tests {
             .run_time_mut()
             .set_run_limit(std::time::Duration::from_millis(max_run_duration_millis));
 
+        // Act
         let consumer_handle = consumer.start();
 
         let consumer = consumer_handle.wait().expect("wait to finish successfully");
+
+        // Assert
         assert!(consumer.stopped());
 
         let ending = consumer.iterations();
@@ -479,14 +505,17 @@ mod tests {
     fn should_offer_messages_to_handler_on_tick() {
         init();
 
+        // Arrange
         let handler = controls::handler::TrackingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
         let messages = add_messages(&mut consumer);
         let messages_count = messages.len() as u64;
 
+        // Act
         let _ = consumer.tick();
 
+        // Assert
         assert_eq!(handler.message_count(), messages_count);
     }
 
@@ -494,13 +523,16 @@ mod tests {
     fn should_stop_processing_messages_when_handler_errors_on_tick() {
         init();
 
+        // Arrange
         let handler = controls::handler::FailingHandler::build();
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
 
         add_messages(&mut consumer);
 
+        // Act
         let _ = consumer.tick();
 
+        // Assert
         let only_one_message_handled = 1;
         assert_eq!(handler.message_count(), only_one_message_handled);
     }
@@ -512,6 +544,7 @@ mod tests {
     fn should_store_position_periodically_to_optimize_resume() {
         init();
 
+        // Arrange
         let handler = controls::handler::TrackingHandler::build();
         let mut settings = Settings::new();
         settings.position_update_interval = 1;
@@ -523,10 +556,11 @@ mod tests {
         let messages = add_messages(&mut consumer);
         let messages_count = messages.len() as u64;
 
+        // Act
         let _ = consumer.tick();
 
+        // Assert
         let position_store = consumer.position_store();
-
         assert_eq!(position_store.put_count(), messages_count);
     }
 
@@ -534,6 +568,7 @@ mod tests {
     fn should_start_from_stored_position() {
         init();
 
+        // Arrange
         let handler = controls::handler::TrackingHandler::build();
 
         let mut consumer = Consumer::new("mycategory").add_handler(handler.clone());
@@ -544,10 +579,12 @@ mod tests {
         let position_store = consumer.position_store_mut();
         position_store.set_position(messages_count);
 
+        // Act
         consumer.initialize();
 
         let _ = consumer.tick();
 
+        // Assert
         let no_messages_processed = 0;
         assert_eq!(handler.message_count(), no_messages_processed);
     }
