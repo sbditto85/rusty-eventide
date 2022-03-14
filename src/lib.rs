@@ -274,7 +274,7 @@ impl<G: Get, B: BackOff, R: RunTime, P: PositionStore> ConsumerHandle<G, B, R, P
 }
 
 #[cfg(test)]
-mod tests {
+mod unit_tests {
     use super::*;
 
     use crate::position_store::PositionStoreTelemetry;
@@ -609,4 +609,10 @@ mod tests {
 
         messages
     }
+}
+
+#[cfg(all(test, feature = "integration"))]
+mod integration_tests {
+    #[test]
+    fn should_run() {}
 }

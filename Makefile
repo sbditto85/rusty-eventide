@@ -3,6 +3,10 @@
 test:
 	cargo nextest run
 
+.PHONY: it
+it:
+	cargo nextest run --features integration
+
 .PHONY: tnc
 tnc:
 	RUST_LOG=debug cargo nextest run --no-capture

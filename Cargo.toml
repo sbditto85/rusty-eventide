@@ -10,3 +10,7 @@ env_logger = "*"
 log = "*"
 microserde = "0.1.13"
 thiserror = "1.0"
+
+[features]
+all = [ "integration" ]
+integration = []
