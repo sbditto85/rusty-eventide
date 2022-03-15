@@ -9,13 +9,17 @@ it:
 
 .PHONY: it_full
 it_full:
-	make mdb && make it && make mdb-down
+	make mdb && make it && make mdb_down
+
+.PHONY: all_tests
+all_tests:
+	cargo nextest run --features all_tests
 
 .PHONY: mdb
 mdb:
 	podman-compose up -d
 
-.PHONY: mdb-down
+.PHONY: mdb_down
 mdb-down:
 	podman-compose down
 
