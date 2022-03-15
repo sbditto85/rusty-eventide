@@ -29,3 +29,9 @@ impl PositionStoreTelemetry for PostgresPositionStore {
 
     fn record_put(&mut self) {}
 }
+
+#[cfg(all(test, feature = "integration_tests"))]
+mod integration_tests {
+    #[test]
+    fn should_run() {}
+}

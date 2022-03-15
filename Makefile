@@ -5,7 +5,19 @@ test:
 
 .PHONY: it
 it:
-	cargo nextest run --features integration
+	cargo nextest run --features integration_tests
+
+.PHONY: it_full
+it_full:
+	make mdb && make it && make mdb-down
+
+.PHONY: mdb
+mdb:
+	podman-compose up -d
+
+.PHONY: mdb-down
+mdb-down:
+	podman-compose down
 
 .PHONY: tnc
 tnc:

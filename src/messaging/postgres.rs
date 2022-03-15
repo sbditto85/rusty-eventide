@@ -25,3 +25,9 @@ impl GetTelemetry for Category {
 
     fn record_got_messages(&mut self, _messages: &[MessageData]) {}
 }
+
+#[cfg(all(test, feature = "integration_tests"))]
+mod integration_tests {
+    #[test]
+    fn should_run() {}
+}

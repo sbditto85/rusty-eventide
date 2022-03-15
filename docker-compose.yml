@@ -1,0 +1,6 @@
+version: "3.9"
+services:
+  message-db:
+    image: ethangarofolo/message-db
+    ports:
+      - 5432:5432

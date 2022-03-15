@@ -611,7 +611,7 @@ mod unit_tests {
     }
 }
 
-#[cfg(all(test, feature = "integration"))]
+#[cfg(all(test, feature = "integration_tests"))]
 mod integration_tests {
     #[test]
     fn should_run() {}

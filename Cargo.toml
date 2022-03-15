@@ -12,5 +12,5 @@ microserde = "0.1.13"
 thiserror = "1.0"
 
 [features]
-all = [ "integration" ]
-integration = []
+all_tests = [ "integration_tests" ]
+integration_tests = []
