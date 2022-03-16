@@ -1,11 +1,13 @@
+TESTS?=
 
 .PHONY: test
 test:
-	cargo nextest run
+	cargo nextest run -- $(TESTS)
+
 
 .PHONY: it
 it:
-	cargo nextest run --features integration_tests
+	cargo nextest run --features integration_tests -- $(TESTS)
 
 .PHONY: it_full
 it_full:
@@ -25,7 +27,7 @@ mdb-down:
 
 .PHONY: tnc
 tnc:
-	RUST_LOG=debug cargo nextest run --no-capture
+	RUST_LOG=debug cargo nextest run --no-capture -- $(TESTS)
 
 .PHONY: examples
 examples:

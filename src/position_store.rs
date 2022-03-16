@@ -1,4 +1,4 @@
-use microserde::json::{Number, Value};
+use serde_json::{Number, Value};
 
 use std::collections::HashMap;
 
@@ -53,8 +53,8 @@ impl PositionStoreTelemetry for SubstitutePositionStore {
         self.telemetry
             .get(GET_COUNT_KEY)
             .map(|value| {
-                if let Value::Number(Number::U64(count)) = value {
-                    *count
+                if let Some(count) = value.as_u64() {
+                    count
                 } else {
                     0
                 }
@@ -66,21 +66,22 @@ impl PositionStoreTelemetry for SubstitutePositionStore {
         self.telemetry
             .entry(GET_COUNT_KEY.to_string())
             .and_modify(|value| {
-                if let Value::Number(Number::U64(count)) = value {
-                    *count += 1;
+                if let Some(mut count) = value.as_u64() {
+                    count += 1;
+                    *value = count.into();
                 } else {
-                    *value = Value::Number(Number::U64(1));
+                    *value = 1u64.into();
                 }
             })
-            .or_insert(Value::Number(Number::U64(1)));
+            .or_insert(1u64.into());
     }
 
     fn put_count(&self) -> u64 {
         self.telemetry
             .get(PUT_COUNT_KEY)
             .map(|value| {
-                if let Value::Number(Number::U64(count)) = value {
-                    *count
+                if let Some(count) = value.as_u64() {
+                    count
                 } else {
                     0
                 }
@@ -92,12 +93,13 @@ impl PositionStoreTelemetry for SubstitutePositionStore {
         self.telemetry
             .entry(PUT_COUNT_KEY.to_string())
             .and_modify(|value| {
-                if let Value::Number(Number::U64(count)) = value {
-                    *count += 1;
+                if let Some(mut count) = value.as_u64() {
+                    count += 1;
+                    *value = count.into();
                 } else {
-                    *value = Value::Number(Number::U64(1));
+                    *value = 1u64.into();
                 }
             })
-            .or_insert(Value::Number(Number::U64(1)));
+            .or_insert(1u64.into());
     }
 }

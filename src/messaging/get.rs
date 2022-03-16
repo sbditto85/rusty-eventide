@@ -1,4 +1,4 @@
-use microserde::json::{Number, Value};
+use serde_json::{Number, Value};
 
 use std::collections::HashMap;
 
@@ -57,8 +57,8 @@ impl GetTelemetry for SubstituteGetter {
         self.telemetry
             .get("get_count")
             .map(|value| {
-                if let Value::Number(Number::U64(count)) = value {
-                    *count
+                if let Some(count) = value.as_u64() {
+                    count
                 } else {
                     0
                 }
@@ -70,21 +70,22 @@ impl GetTelemetry for SubstituteGetter {
         self.telemetry
             .entry("get_count".to_string())
             .and_modify(|value| {
-                if let Value::Number(Number::U64(count)) = value {
-                    *count += 1;
+                if let Some(mut count) = value.as_u64() {
+                    count += 1;
+                    *value = count.into();
                 } else {
-                    *value = Value::Number(Number::U64(1));
+                    *value = 1u64.into();
                 }
             })
-            .or_insert(Value::Number(Number::U64(1)));
+            .or_insert(1u64.into());
     }
 
     fn get_messages_count(&self) -> u64 {
         self.telemetry
             .get("get_messages_count")
             .map(|value| {
-                if let Value::Number(Number::U64(count)) = value {
-                    *count
+                if let Some(count) = value.as_u64() {
+                    count
                 } else {
                     0
                 }
@@ -97,13 +98,14 @@ impl GetTelemetry for SubstituteGetter {
         self.telemetry
             .entry("get_messages_count".to_string())
             .and_modify(|value| {
-                if let Value::Number(Number::U64(count)) = value {
-                    *count += fetched_count;
+                if let Some(mut count) = value.as_u64() {
+                    count += fetched_count;
+                    *value = count.into();
                 } else {
-                    *value = Value::Number(Number::U64(fetched_count));
+                    *value = fetched_count.into();
                 }
             })
-            .or_insert(Value::Number(Number::U64(fetched_count)));
+            .or_insert(fetched_count.into());
     }
 }
 
