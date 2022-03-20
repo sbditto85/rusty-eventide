@@ -9,6 +9,10 @@ test:
 it:
 	cargo nextest run --features integration_tests -- $(TESTS)
 
+.PHONY: itnc
+itnc:
+	cargo nextest run --no-capture --features integration_tests -- $(TESTS)
+
 .PHONY: it_full
 it_full:
 	make mdb && make it && make mdb_down

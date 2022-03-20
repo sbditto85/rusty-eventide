@@ -1,11 +1,19 @@
-use serde_json::{Number, Value};
+use serde_json::Value;
+use thiserror::Error;
 
 use std::collections::HashMap;
+use std::error::Error as StdError;
 
 use crate::messaging::MessageData;
 
 pub trait Get: GetTelemetry {
-    fn get(&mut self, position: i64) -> Vec<MessageData>;
+    fn get(&mut self, position: i64) -> Result<Vec<MessageData>, GetError>;
+}
+
+#[derive(Error, Debug)]
+pub enum GetError {
+    #[error("An error getting data occurred: {0}")]
+    DataError(#[from] Box<dyn StdError + Send + Sync>),
 }
 
 pub trait GetTelemetry {
@@ -38,16 +46,16 @@ impl SubstituteGetter {
 }
 
 impl Get for SubstituteGetter {
-    fn get(&mut self, position: i64) -> Vec<MessageData> {
+    fn get(&mut self, position: i64) -> Result<Vec<MessageData>, GetError> {
         self.record_get();
         if self.messages.len() > 0 {
             let messages = std::mem::replace(&mut self.messages, Vec::new());
             let limited_messages = &messages[position as usize..];
             self.record_got_messages(&limited_messages);
 
-            limited_messages.to_vec()
+            Ok(limited_messages.to_vec())
         } else {
-            vec![]
+            Ok(vec![])
         }
     }
 }
@@ -119,14 +127,14 @@ mod tests {
         let messages = messages::example();
         let mut get = SubstituteGetter::new("my_category");
         get.queue_messages(&messages);
-        let returned_messages = get.get(0);
+        let returned_messages = get.get(0).expect("get to work");
         assert_eq!(messages, returned_messages);
     }
 
     #[test]
     fn should_respond_with_no_messages_when_none_queued() {
         let mut get = SubstituteGetter::new("my_category");
-        let returned_messages = get.get(0);
+        let returned_messages = get.get(0).expect("get to work");
         assert!(returned_messages.len() == 0);
     }
 
@@ -135,7 +143,7 @@ mod tests {
         let messages = messages::example();
         let mut get = SubstituteGetter::new("my_category");
         get.queue_messages(&messages);
-        let returned_messages = get.get(1);
+        let returned_messages = get.get(1).expect("get to work");
         assert_eq!(messages[1..], returned_messages);
     }
 
@@ -144,9 +152,9 @@ mod tests {
         let mut get = SubstituteGetter::new("my_category");
 
         assert_eq!(get.get_count(), 0);
-        get.get(0);
+        get.get(0).expect("get to work");
         assert_eq!(get.get_count(), 1);
-        get.get(0);
+        get.get(0).expect("get to work");
         assert_eq!(get.get_count(), 2);
     }
 

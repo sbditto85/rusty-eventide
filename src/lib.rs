@@ -64,7 +64,7 @@ impl Consumer<Category, ConstantBackOff, SystemRunTime, PostgresPositionStore> {
             handlers: Vec::new(),
             active: Arc::new(Mutex::new(true)),
             iterations: Arc::new(Mutex::new(0)),
-            get: Category,
+            get: Category::build(category).expect("category to build"), //TODO: handle error
             back_off: ConstantBackOff::build(),
             position: 0, // TODO: have some "default?"
             position_update_counter: 0,
@@ -172,7 +172,7 @@ impl<
     pub fn tick(&mut self) -> Result<u64, HandleError> {
         self.increment_iterations();
 
-        let messages = self.get.get(self.position as i64); //TODO: handle position
+        let messages = self.get.get(self.position as i64)?; //TODO: handle position
         let messages_length = messages.len();
 
         for message_data in messages {

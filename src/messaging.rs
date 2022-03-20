@@ -16,6 +16,8 @@ pub struct MessageData {
 pub enum HandleError {
     #[error("Error in handler code {0}")]
     HandlerError(#[from] Box<dyn StdError + Send>),
+    #[error("Unable to get messages {0}")]
+    GetError(#[from] GetError),
     #[error("Missing Handler")]
     MissingHandler,
 }
