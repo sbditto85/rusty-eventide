@@ -111,7 +111,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn should_get_one_message_when_one_available() {
+    fn should_get_one_message_when_one_in_stream() {
         init();
 
         // Arrange
@@ -133,7 +133,7 @@ mod integration_tests {
     // fn should_properly_return_an_expected_version_error_when_expected_version_is_incorrect() {}
 
     #[test]
-    fn should_get_multiple_messages_when_multiple_available() {
+    fn should_get_multiple_messages_when_multiple_in_stream() {
         init();
 
         // Arrange
@@ -152,7 +152,7 @@ mod integration_tests {
 
     #[test]
     #[ignore]
-    fn should_get_none_when_position_more_than_available() {}
+    fn should_get_none_when_position_more_than_in_stream() {}
 
     #[test]
     #[ignore]
@@ -160,7 +160,7 @@ mod integration_tests {
 
     #[test]
     #[ignore]
-    fn should_limit_get_when_batch_size_less_then_available() {}
+    fn should_limit_get_when_batch_size_less_then_in_stream() {}
 
     #[test]
     #[ignore]
