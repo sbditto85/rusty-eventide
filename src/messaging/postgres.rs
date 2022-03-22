@@ -133,8 +133,22 @@ mod integration_tests {
     // fn should_properly_return_an_expected_version_error_when_expected_version_is_incorrect() {}
 
     #[test]
-    #[ignore]
-    fn should_get_multiple_messages_when_multiple_available() {}
+    fn should_get_multiple_messages_when_multiple_available() {
+        init();
+
+        // Arrange
+        let category = controls::messages::write_random_to_random_category();
+        controls::messages::write_random_to_category(&category);
+        let mut category_get = Category::build(category).expect("category to build");
+
+        // Act
+        let beginning_position = 0;
+        let messages = category_get.get(beginning_position).expect("get to work");
+
+        // Assert
+        let multiple_messages = 2;
+        assert_eq!(messages.len(), multiple_messages);
+    }
 
     #[test]
     #[ignore]
