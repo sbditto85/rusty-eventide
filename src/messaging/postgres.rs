@@ -61,7 +61,7 @@ impl Get for Category {
         condition varchar DEFAULT NULL
          */
         let batch_size: Option<i64> = self.settings.batch_size.map(|bs| bs as i64);
-        let correlation: Option<String> = None;
+        let correlation: &Option<String> = &self.settings.correlation;
         let consumer_group_member: Option<i64> = None;
         let consumer_group_size: Option<i64> = None;
         let condition: Option<String> = None;
@@ -200,8 +200,35 @@ mod integration_tests {
     }
 
     #[test]
-    #[ignore]
-    fn should_filter_by_correlation_stream_name_when_applied() {}
+    fn should_filter_by_correlation_stream_name_when_applied() {
+        init();
+
+        // Arrange
+        let correlation = "my_stream_category";
+
+        let category = controls::messages::postgres::write_random_message_to_random_category();
+        controls::messages::postgres::write_random_message_with_correlation_to_category(
+            &category,
+            &correlation,
+        );
+
+        let category_count = controls::messages::postgres::category_count(&category);
+        let expected_total_count = 2;
+        assert_eq!(category_count, expected_total_count);
+
+        let mut settings = Settings::new();
+        settings.correlation = Some(correlation.to_string());
+        let mut category_get =
+            Category::build_params(category, settings).expect("category to build");
+
+        // Act
+        let beginning_position = 0;
+        let messages = category_get.get(beginning_position).expect("get to work");
+
+        // Assert
+        let correlation_count = 1;
+        assert_eq!(messages.len(), correlation_count);
+    }
 
     #[test]
     #[ignore]
