@@ -19,25 +19,31 @@ impl messaging::Handler for EventHandler {
     }
 }
 
-#[test]
-fn should_start_a_consumer() {
-    let mut consumer = Consumer::build("category")
-        .add_handler(EventHandler::build())
-        .start();
+#[cfg(all(test, feature = "integration_tests"))]
+mod test {
 
-    assert!(consumer.started());
-    consumer.stop();
-    assert!(consumer.stopped());
-}
+    use super::*;
 
-#[test]
-fn should_start_a_consumer_with_settings() {
-    let mut consumer = Consumer::build("category:command")
-        .with_settings(Settings::new())
-        .add_handler(EventHandler::build())
-        .start();
+    #[test]
+    fn should_start_a_consumer() {
+        let mut consumer = Consumer::build("category")
+            .add_handler(EventHandler::build())
+            .start();
 
-    assert!(consumer.started());
-    consumer.stop();
-    assert!(consumer.stopped());
+        assert!(consumer.started());
+        consumer.stop();
+        assert!(consumer.stopped());
+    }
+
+    #[test]
+    fn should_start_a_consumer_with_settings() {
+        let mut consumer = Consumer::build("category:command")
+            .with_settings(Settings::new())
+            .add_handler(EventHandler::build())
+            .start();
+
+        assert!(consumer.started());
+        consumer.stop();
+        assert!(consumer.stopped());
+    }
 }

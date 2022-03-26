@@ -9,6 +9,7 @@ use crate::{
         MessageData,
     },
     session::Session,
+    settings::Settings,
 };
 
 #[derive(Error, Debug)]
@@ -20,6 +21,7 @@ pub enum CategoryError {
 #[derive(Debug)]
 pub struct Category {
     category: String,
+    settings: Settings,
     session: Session, // telemetry: HashMap::new(),
 }
 
@@ -27,6 +29,18 @@ impl Category {
     pub fn build(category: impl Into<String>) -> Result<Self, CategoryError> {
         Ok(Self {
             category: category.into(),
+            settings: Settings::build(),
+            session: Session::build()?,
+        })
+    }
+
+    pub fn build_params(
+        category: impl Into<String>,
+        settings: Settings,
+    ) -> Result<Self, CategoryError> {
+        Ok(Self {
+            category: category.into(),
+            settings,
             session: Session::build()?,
         })
     }
@@ -46,7 +60,7 @@ impl Get for Category {
         consumer_group_size bigint DEFAULT NULL,
         condition varchar DEFAULT NULL
          */
-        let batch_size: Option<i64> = None;
+        let batch_size: Option<i64> = self.settings.batch_size.map(|bs| bs as i64);
         let correlation: Option<String> = None;
         let consumer_group_member: Option<i64> = None;
         let consumer_group_size: Option<i64> = None;
@@ -59,6 +73,8 @@ impl Get for Category {
                 log::error!("THIS ERROR HAPPENED: {}", error);
                 Box::new(error) as Box<dyn StdError + Send + Sync>
             })?;
+
+        log::trace!("Rows Returned: {:?}", rows);
 
         Ok(rows
             .into_iter()
@@ -87,7 +103,7 @@ impl GetTelemetry for Category {
 #[cfg(all(test, feature = "integration_tests"))]
 mod integration_tests {
     use super::*;
-    use crate::controls;
+    use crate::{controls, settings::Settings};
 
     fn init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -115,7 +131,7 @@ mod integration_tests {
         init();
 
         // Arrange
-        let category = controls::messages::write_random_to_random_category();
+        let category = controls::messages::postgres::write_random_message_to_random_category();
         let mut category_get = Category::build(category).expect("category to build");
 
         // Act
@@ -137,8 +153,8 @@ mod integration_tests {
         init();
 
         // Arrange
-        let category = controls::messages::write_random_to_random_category();
-        controls::messages::write_random_to_category(&category);
+        let category = controls::messages::postgres::write_random_message_to_random_category();
+        controls::messages::postgres::write_random_message_to_category(&category);
         let mut category_get = Category::build(category).expect("category to build");
 
         // Act
@@ -151,20 +167,41 @@ mod integration_tests {
     }
 
     #[test]
-    #[ignore]
-    fn should_get_none_when_position_more_than_in_stream() {}
+    fn should_limit_get_when_batch_size_less_then_in_stream() {
+        init();
+        let batch_size = 2;
+
+        // Arrange
+        let category = controls::messages::postgres::write_random_message_to_random_category();
+        controls::messages::postgres::write_bulk_random_messages_to_category(
+            &category,
+            batch_size * 2,
+        );
+
+        let category_count = controls::messages::postgres::category_count(&category);
+        assert!(
+            batch_size < category_count,
+            "batch_size ({}) must be less then category_count ({}) for the test to work",
+            batch_size,
+            category_count
+        );
+
+        let mut settings = Settings::new();
+        settings.batch_size = Some(batch_size);
+        let mut category_get =
+            Category::build_params(category, settings).expect("category to build");
+
+        // Act
+        let beginning_position = 0;
+        let messages = category_get.get(beginning_position).expect("get to work");
+
+        // Assert
+        assert_eq!(messages.len(), batch_size as usize);
+    }
 
     #[test]
     #[ignore]
-    fn should_get_half_when_position_half_way() {}
-
-    #[test]
-    #[ignore]
-    fn should_limit_get_when_batch_size_less_then_in_stream() {}
-
-    #[test]
-    #[ignore]
-    fn should_filter_by_correlation_when_applied() {}
+    fn should_filter_by_correlation_stream_name_when_applied() {}
 
     #[test]
     #[ignore]
@@ -173,4 +210,27 @@ mod integration_tests {
     #[test]
     #[ignore]
     fn should_get_only_applicable_message_when_condition_supplied() {}
+
+    #[test]
+    #[ignore]
+    fn should_get_none_when_position_more_than_in_stream() {
+        init();
+
+        // Arrange
+        let category = controls::messages::postgres::write_random_message_to_random_category();
+        let mut category_get = Category::build(category).expect("category to build");
+
+        // Act
+        // TODO: Crap thats global position ...... what to do
+        let beginning_position = 2; // 2 is greater then 1 ... in case you didn't know
+        let messages = category_get.get(beginning_position).expect("get to work");
+
+        // Assert
+        let no_messages = 0;
+        assert_eq!(messages.len(), no_messages);
+    }
+
+    #[test]
+    #[ignore]
+    fn should_get_half_when_position_half_way() {}
 }
