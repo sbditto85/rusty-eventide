@@ -29,6 +29,9 @@ mdb:
 mdb-down:
 	podman-compose down
 
+.PHONY: reset-mdb
+reset-mdb: mdb-down mdb
+
 .PHONY: tnc
 tnc:
 	RUST_LOG=debug cargo nextest run --no-capture -- $(TESTS)

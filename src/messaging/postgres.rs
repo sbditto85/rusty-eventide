@@ -62,8 +62,10 @@ impl Get for Category {
          */
         let batch_size: Option<i64> = self.settings.batch_size.map(|bs| bs as i64);
         let correlation: &Option<String> = &self.settings.correlation;
-        let consumer_group_member: Option<i64> = None;
-        let consumer_group_size: Option<i64> = None;
+        let consumer_group_member: Option<i64> =
+            self.settings.consumer_group_member.map(|cgm| cgm as i64);
+        let consumer_group_size: Option<i64> =
+            self.settings.consumer_group_size.map(|cgs| cgs as i64);
         let condition: Option<String> = None;
 
         let rows = self.session
@@ -231,8 +233,37 @@ mod integration_tests {
     }
 
     #[test]
-    #[ignore]
-    fn should_get_only_consumer_specific_messages_when_in_consumer_group() {}
+    fn should_get_only_consumer_specific_messages_when_in_consumer_group() {
+        init();
+
+        // Arrange
+        let consumer_group_member = 0;
+        let consumer_group_size = 2;
+        // write a control that will add only messages until at least one exists that applies and doesn't apply to consumer for the consumer group
+        let category =
+            controls::messages::postgres::write_one_random_message_for_consumer_and_one_not_to_random_category(
+                consumer_group_member,
+                consumer_group_size,
+            );
+
+        let category_count = controls::messages::postgres::category_count(&category);
+        let expected_more_than = 1;
+        assert!(category_count > expected_more_than);
+
+        let mut settings = Settings::new();
+        settings.consumer_group_member = Some(consumer_group_member);
+        settings.consumer_group_size = Some(consumer_group_size);
+        let mut category_get =
+            Category::build_params(category, settings).expect("category to build");
+
+        // Act
+        let beginning_position = 0;
+        let messages = category_get.get(beginning_position).expect("get to work");
+
+        //Assert
+        let consumer_message_count = 1;
+        assert_eq!(messages.len(), consumer_message_count);
+    }
 
     #[test]
     #[ignore]

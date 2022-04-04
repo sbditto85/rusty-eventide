@@ -115,3 +115,130 @@ pub fn write_random_message_with_correlation_to_category(category: &str, correla
         )
         .expect("random write to work");
 }
+
+pub fn write_one_random_message_for_consumer_and_one_not_to_random_category(
+    consumer_group_member: u64,
+    consumer_group_size: u64,
+) -> String {
+    let mut session = Session::build().expect("session to build");
+
+    let category = crate::controls::category::unique_category();
+
+    let id = stream_id_for_consumer_in_group(consumer_group_member, consumer_group_size);
+    let stream_name = format!("{}-{}", category, id.to_hyphenated().to_string());
+    let message_type = "Random";
+    let empty_object: HashMap<String, String> = HashMap::new();
+    let data = serde_json::to_value(&empty_object).expect("to_string_to_work");
+    let meta_data: Option<serde_json::Value> = None;
+    let expected_version = -1i64;
+
+    session
+        .query(
+            "SELECT write_message($1::varchar, $2::varchar, $3::varchar, $4::jsonb, $5::jsonb, $6::bigint);",
+            &[
+                &id.to_hyphenated().to_string(),
+                &stream_name,
+                &message_type,
+                &data,
+                &meta_data,
+                &expected_version,
+            ],
+        )
+        .expect("random write to work");
+
+    let id = stream_id_not_for_consumer_in_group(consumer_group_member, consumer_group_size);
+    let stream_name = format!("{}-{}", category, id.to_hyphenated().to_string());
+    let message_type = "Random";
+    let empty_object: HashMap<String, String> = HashMap::new();
+    let data = serde_json::to_value(&empty_object).expect("to_string_to_work");
+    let meta_data: Option<serde_json::Value> = None;
+    let expected_version = -1i64;
+
+    session
+        .query(
+            "SELECT write_message($1::varchar, $2::varchar, $3::varchar, $4::jsonb, $5::jsonb, $6::bigint);",
+            &[
+                &id.to_hyphenated().to_string(),
+                &stream_name,
+                &message_type,
+                &data,
+                &meta_data,
+                &expected_version,
+            ],
+        )
+        .expect("random write to work");
+
+    category
+}
+
+pub fn stream_id_for_consumer_in_group(
+    consumer_group_member: u64,
+    consumer_group_size: u64,
+) -> Uuid {
+    let consumer_group_member = consumer_group_member as i64;
+    let consumer_group_size = consumer_group_size as i64;
+    let mut session = Session::build().expect("session to build");
+
+    let mut possible_uuid = Uuid::new_v4(); //To keep rust happy I must initialize it before the loop
+    let mut belongs = false;
+    let mut count = 100;
+
+    while !belongs {
+        if count == 0 {
+            panic!("Tried too many times to find a valid stream id");
+        }
+
+        possible_uuid = Uuid::new_v4();
+
+        let uuid_string = format!("{}", possible_uuid.to_hyphenated_ref());
+        let rows = session
+            .query(
+                "SELECT MOD(@hash_64($3::varchar), $2::bigint) = $1::bigint as belongs;",
+                &[&consumer_group_member, &consumer_group_size, &uuid_string],
+            )
+            .expect("the mod query to run");
+
+        belongs = rows[0].get::<&str, bool>("belongs");
+        log::debug!("UUID: {} => {}", uuid_string, belongs);
+
+        count -= 1;
+    }
+
+    possible_uuid
+}
+
+pub fn stream_id_not_for_consumer_in_group(
+    consumer_group_member: u64,
+    consumer_group_size: u64,
+) -> Uuid {
+    let consumer_group_member = consumer_group_member as i64;
+    let consumer_group_size = consumer_group_size as i64;
+    let mut session = Session::build().expect("session to build");
+
+    let mut possible_uuid = Uuid::new_v4(); //To keep rust happy I must initialize it before the loop
+    let mut belongs = true;
+    let mut count = 100;
+
+    while belongs {
+        if count == 0 {
+            panic!("Tried too many times to find a valid stream id");
+        }
+
+        possible_uuid = Uuid::new_v4();
+
+        let uuid_string = format!("{}", possible_uuid.to_hyphenated_ref());
+        let rows = session
+            .query(
+                "SELECT MOD(@hash_64($3::varchar), $2::bigint) = $1::bigint as belongs;",
+                &[&consumer_group_member, &consumer_group_size, &uuid_string],
+            )
+            .expect("the mod query to run");
+
+        belongs = rows[0].get::<&str, bool>("belongs");
+        log::debug!("UUID: {} => {}", uuid_string, belongs);
+
+        count -= 1;
+    }
+
+    possible_uuid
+}
