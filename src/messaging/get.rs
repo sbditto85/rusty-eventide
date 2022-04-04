@@ -17,9 +17,7 @@ pub enum GetError {
 }
 
 pub trait GetTelemetry {
-    fn get_count(&self) -> u64;
     fn record_get(&mut self);
-    fn get_messages_count(&self) -> u64;
     fn record_got_messages(&mut self, messages: &[MessageData]);
 }
 
@@ -43,6 +41,32 @@ impl SubstituteGetter {
     pub fn queue_messages(&mut self, messages: &[MessageData]) {
         self.messages.extend_from_slice(messages)
     }
+
+    pub fn get_count(&self) -> u64 {
+        self.telemetry
+            .get("get_count")
+            .map(|value| {
+                if let Some(count) = value.as_u64() {
+                    count
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn get_messages_count(&self) -> u64 {
+        self.telemetry
+            .get("get_messages_count")
+            .map(|value| {
+                if let Some(count) = value.as_u64() {
+                    count
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0)
+    }
 }
 
 impl Get for SubstituteGetter {
@@ -61,19 +85,6 @@ impl Get for SubstituteGetter {
 }
 
 impl GetTelemetry for SubstituteGetter {
-    fn get_count(&self) -> u64 {
-        self.telemetry
-            .get("get_count")
-            .map(|value| {
-                if let Some(count) = value.as_u64() {
-                    count
-                } else {
-                    0
-                }
-            })
-            .unwrap_or(0)
-    }
-
     fn record_get(&mut self) {
         self.telemetry
             .entry("get_count".to_string())
@@ -86,19 +97,6 @@ impl GetTelemetry for SubstituteGetter {
                 }
             })
             .or_insert(1u64.into());
-    }
-
-    fn get_messages_count(&self) -> u64 {
-        self.telemetry
-            .get("get_messages_count")
-            .map(|value| {
-                if let Some(count) = value.as_u64() {
-                    count
-                } else {
-                    0
-                }
-            })
-            .unwrap_or(0)
     }
 
     fn record_got_messages(&mut self, messages: &[MessageData]) {

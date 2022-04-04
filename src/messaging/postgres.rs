@@ -90,14 +90,7 @@ impl Get for Category {
 }
 
 impl GetTelemetry for Category {
-    fn get_count(&self) -> u64 {
-        0
-    }
     fn record_get(&mut self) {}
-
-    fn get_messages_count(&self) -> u64 {
-        0
-    }
 
     fn record_got_messages(&mut self, _messages: &[MessageData]) {}
 }
@@ -239,7 +232,7 @@ mod integration_tests {
         // Arrange
         let consumer_group_member = 0;
         let consumer_group_size = 2;
-        // write a control that will add only messages until at least one exists that applies and doesn't apply to consumer for the consumer group
+
         let category =
             controls::messages::postgres::write_one_random_message_for_consumer_and_one_not_to_random_category(
                 consumer_group_member,
@@ -277,6 +270,9 @@ mod integration_tests {
         // Arrange
         let category = controls::messages::postgres::write_random_message_to_random_category();
         let mut category_get = Category::build(category).expect("category to build");
+
+        // let current_max_global_position =
+        //     controls::messages::postgres::current_max_global_position();
 
         // Act
         // TODO: Crap thats global position ...... what to do
