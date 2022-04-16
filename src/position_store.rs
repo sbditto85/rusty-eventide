@@ -12,9 +12,7 @@ pub trait PositionStore: PositionStoreTelemetry + std::fmt::Debug {
 }
 
 pub trait PositionStoreTelemetry {
-    fn get_count(&self) -> u64;
     fn record_get(&mut self);
-    fn put_count(&self) -> u64;
     fn record_put(&mut self);
 }
 
@@ -35,6 +33,32 @@ impl SubstitutePositionStore {
     pub fn set_position(&mut self, position: u64) {
         self.position = Some(position);
     }
+
+    pub fn get_count(&self) -> u64 {
+        self.telemetry
+            .get(GET_COUNT_KEY)
+            .map(|value| {
+                if let Some(count) = value.as_u64() {
+                    count
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn put_count(&self) -> u64 {
+        self.telemetry
+            .get(PUT_COUNT_KEY)
+            .map(|value| {
+                if let Some(count) = value.as_u64() {
+                    count
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0)
+    }
 }
 
 impl PositionStore for SubstitutePositionStore {
@@ -51,19 +75,6 @@ const GET_COUNT_KEY: &'static str = "get_count";
 const PUT_COUNT_KEY: &'static str = "put_count";
 
 impl PositionStoreTelemetry for SubstitutePositionStore {
-    fn get_count(&self) -> u64 {
-        self.telemetry
-            .get(GET_COUNT_KEY)
-            .map(|value| {
-                if let Some(count) = value.as_u64() {
-                    count
-                } else {
-                    0
-                }
-            })
-            .unwrap_or(0)
-    }
-
     fn record_get(&mut self) {
         self.telemetry
             .entry(GET_COUNT_KEY.to_string())
@@ -76,19 +87,6 @@ impl PositionStoreTelemetry for SubstitutePositionStore {
                 }
             })
             .or_insert(1u64.into());
-    }
-
-    fn put_count(&self) -> u64 {
-        self.telemetry
-            .get(PUT_COUNT_KEY)
-            .map(|value| {
-                if let Some(count) = value.as_u64() {
-                    count
-                } else {
-                    0
-                }
-            })
-            .unwrap_or(0)
     }
 
     fn record_put(&mut self) {

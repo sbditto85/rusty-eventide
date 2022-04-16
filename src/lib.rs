@@ -284,8 +284,6 @@ impl<G: Get, B: BackOff, R: RunTime, P: PositionStore> ConsumerHandle<G, B, R, P
 mod unit_tests {
     use super::*;
 
-    use crate::position_store::PositionStoreTelemetry;
-
     fn init() {
         let _ = env_logger::builder().is_test(true).try_init();
     }

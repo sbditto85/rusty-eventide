@@ -17,15 +17,7 @@ impl PositionStore for PostgresPositionStore {
 }
 
 impl PositionStoreTelemetry for PostgresPositionStore {
-    fn get_count(&self) -> u64 {
-        0
-    }
-
     fn record_get(&mut self) {}
-
-    fn put_count(&self) -> u64 {
-        0
-    }
 
     fn record_put(&mut self) {}
 }
