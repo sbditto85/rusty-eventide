@@ -17,6 +17,7 @@ pub mod run_time;
 pub mod session;
 pub mod settings;
 
+// TODO: maybe get defaults depending on what is fulfilling the get?
 const DEFAULT_POSITION: u64 = 1;
 const DEFAULT_POSITION_COUNTER: u64 = 0;
 
