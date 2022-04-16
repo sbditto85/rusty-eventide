@@ -38,12 +38,19 @@ tnc:
 
 .PHONY: examples
 examples:
-	cargo build --example simple_consumer
+	cargo build --example simple_consumer --example add_category_event
+
+.PHONY: add_category_event
+add_category_event:
+	cargo run --example add_category_event
 
 .PHONY: simple_consumer
 simple_consumer:
 	cargo run --example simple_consumer
 
+.PHONY: simple_consumer_release
+simple_consumer_release:
+	cargo run --release --example simple_consumer
 
 .PHONY: install-test
 install-test:

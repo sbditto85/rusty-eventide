@@ -15,6 +15,7 @@ impl EventHandler {
 
 impl messaging::Handler for EventHandler {
     fn handle(&mut self, _message: messaging::MessageData) -> Result<(), HandleError> {
+        println!("Got a message");
         Ok(())
     }
 }

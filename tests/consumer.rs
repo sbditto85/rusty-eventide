@@ -1,4 +1,6 @@
-use rusty_eventide::{messaging::HandleError, settings::Settings, *};
+#[cfg(feature = "integration_tests")]
+use rusty_eventide::settings::Settings;
+use rusty_eventide::{messaging::HandleError, *};
 
 #[derive(Debug)]
 pub struct EventHandler;

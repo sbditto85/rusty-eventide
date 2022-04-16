@@ -47,7 +47,6 @@ impl Category {
     }
 }
 
-//TODO: actually do this
 impl Get for Category {
     fn get(&mut self, position: i64) -> Result<Vec<MessageData>, GetError> {
         // self.record_get();
@@ -308,20 +307,23 @@ mod integration_tests {
     }
 
     #[test]
-    #[ignore]
     fn should_get_none_when_position_more_than_in_stream() {
         init();
 
         // Arrange
         let category = controls::messages::postgres::write_random_message_to_random_category();
+
+        let category_count = controls::messages::postgres::category_count(&category);
+        let expected_more_than = 0;
+        assert!(category_count > expected_more_than);
+
+        let current_max_global_position =
+            controls::messages::postgres::current_max_global_position();
+
         let mut category_get = Category::build(category).expect("category to build");
 
-        // let current_max_global_position =
-        //     controls::messages::postgres::current_max_global_position();
-
         // Act
-        // TODO: Crap thats global position ...... what to do
-        let beginning_position = 2; // 2 is greater then 1 ... in case you didn't know
+        let beginning_position = current_max_global_position + 1; // Should be at least one more then the message written above (could be more)
         let messages = category_get.get(beginning_position).expect("get to work");
 
         // Assert
@@ -330,6 +332,29 @@ mod integration_tests {
     }
 
     #[test]
-    #[ignore]
-    fn should_get_half_when_position_half_way() {}
+    fn should_get_half_when_position_half_way() {
+        init();
+
+        // Arrange
+        let category = controls::messages::postgres::write_random_message_to_random_category();
+        controls::messages::postgres::write_bulk_random_messages_to_category(&category, 2);
+
+        let middle_global_position = controls::messages::postgres::current_max_global_position();
+
+        controls::messages::postgres::write_bulk_random_messages_to_category(&category, 2);
+
+        let category_count = controls::messages::postgres::category_count(&category);
+        let expected_count = 5;
+        assert!(category_count == expected_count);
+
+        let mut category_get = Category::build(category).expect("category to build");
+
+        // Act
+        let beginning_position = middle_global_position + 1; // Get everything after the middle event
+        let messages = category_get.get(beginning_position).expect("get to work");
+
+        // Assert
+        let two_messages = 2;
+        assert_eq!(messages.len(), two_messages);
+    }
 }

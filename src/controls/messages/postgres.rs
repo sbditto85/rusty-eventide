@@ -280,3 +280,18 @@ pub fn enable_condition_for_session(session: &mut Session) {
         )
         .expect("the mod query to run");
 }
+
+pub fn current_max_global_position() -> i64 {
+    let mut session = Session::build().expect("session to build");
+
+    let rows = session
+        .query(
+            "SELECT max(global_position) as max_global_position FROM messages",
+            &[],
+        )
+        .expect("the mod query to run");
+
+    rows.get(0)
+        .and_then(|row| row.get("max_global_position"))
+        .unwrap_or(-1i64)
+}

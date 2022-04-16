@@ -17,6 +17,9 @@ pub mod run_time;
 pub mod session;
 pub mod settings;
 
+const DEFAULT_POSITION_START: u64 = 0;
+const DEFAULT_POSITION_COUNTER: u64 = 0;
+
 #[derive(Debug)]
 pub struct Consumer<G: Get, B: BackOff, R: RunTime, P: PositionStore> {
     run_time: R,
@@ -46,8 +49,8 @@ impl Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime, SubstitutePo
             iterations: Arc::new(Mutex::new(0)),
             get: SubstituteGetter::new(category),
             back_off: ConstantBackOff::new(),
-            position: 0,
-            position_update_counter: 0,
+            position: DEFAULT_POSITION_START,
+            position_update_counter: DEFAULT_POSITION_COUNTER,
             position_store: SubstitutePositionStore::new(),
             settings: Settings::new(),
         }
@@ -66,8 +69,8 @@ impl Consumer<Category, ConstantBackOff, SystemRunTime, PostgresPositionStore> {
             iterations: Arc::new(Mutex::new(0)),
             get: Category::build(category).expect("category to build"), //TODO: handle error
             back_off: ConstantBackOff::build(),
-            position: 0, // TODO: have some "default?"
-            position_update_counter: 0,
+            position: DEFAULT_POSITION_START,
+            position_update_counter: DEFAULT_POSITION_COUNTER,
             position_store: PostgresPositionStore::build(),
             settings: Settings::build(),
         }
@@ -172,6 +175,7 @@ impl<
     pub fn tick(&mut self) -> Result<u64, HandleError> {
         self.increment_iterations();
 
+        println!("Tick for Position: {}", self.position);
         let messages = self.get.get(self.position as i64)?; //TODO: handle position
         let messages_length = messages.len();
 
@@ -320,6 +324,29 @@ mod unit_tests {
         let get = consumer.get();
         assert_eq!(messages_count, get.get_messages_count());
     }
+
+    // #[test]
+    // #[ignore]
+    // fn should_request_next_position_on_next_tick() {
+    //     init();
+
+    //     // Arrange
+    //     let mut consumer = Consumer::new("mycategory");
+
+    //     let messages = add_messages(&mut consumer);
+    //     let messages_count = messages.len() as u64;
+
+    //     // Run one tick
+    //     let _ = consumer.tick();
+
+    //     // Act
+    //     let _ = consumer.tick();
+
+    //     // Assert
+    //     let get = consumer.get();
+    //     //TODO: need to figure this out
+    //     // assert_eq!(messages_count as i64 + 1, get.last_position_requested());
+    // }
 
     /////////////////////
     // Running
