@@ -80,10 +80,11 @@ impl Get for Category {
 
         Ok(rows
             .into_iter()
-            .map(|_row| {
-                // TODO: test force getting message data
-                // let global_position: i64 = row.get("global_position");
-                MessageData { global_position: 0 }
+            .map(|row| {
+                let global_position: i64 = row.get("global_position");
+                MessageData {
+                    global_position: global_position as u64,
+                }
             })
             .collect())
     }
@@ -356,5 +357,31 @@ mod integration_tests {
         // Assert
         let two_messages = 2;
         assert_eq!(messages.len(), two_messages);
+    }
+
+    #[test]
+    fn should_get_messages_with_global_position_set_correctly() {
+        init();
+
+        // Arrange
+        let starting_global_position = controls::messages::postgres::current_max_global_position();
+        assert!(starting_global_position > 0);
+
+        let category = controls::messages::postgres::write_random_message_to_random_category();
+        let category_count = controls::messages::postgres::category_count(&category);
+        let expected_count = 1;
+        assert!(category_count == expected_count);
+
+        let mut category_get = Category::build(category).expect("category to build");
+
+        // Act
+        let messages = category_get
+            .get(starting_global_position)
+            .expect("get to work");
+
+        // Assert
+        for message in messages.into_iter() {
+            assert!(message.global_position as i64 > starting_global_position);
+        }
     }
 }

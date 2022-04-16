@@ -174,9 +174,10 @@ impl<
     }
 
     pub fn tick(&mut self) -> Result<u64, HandleError> {
+        log::trace!("Tick for Position: {}", self.position);
+
         self.increment_iterations();
 
-        // println!("Tick for Position: {}", self.position);
         let messages = self.get.get(self.position as i64)?; //TODO: handle position
         let messages_length = messages.len();
 
@@ -621,7 +622,9 @@ mod unit_tests {
 
     #[test]
     #[ignore]
-    fn should_start_at_zero_with_no_position_stored() {}
+    fn should_start_at_default_global_position_with_no_position_stored() {
+        //TODO: do this
+    }
 
     /////////////////////
     // Helpers
