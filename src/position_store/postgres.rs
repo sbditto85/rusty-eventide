@@ -11,7 +11,7 @@ impl PostgresPositionStore {
 
 impl PositionStore for PostgresPositionStore {
     fn get(&mut self) -> u64 {
-        0
+        1
     }
     fn put(&mut self, _position: u64) {}
 }

@@ -3,7 +3,7 @@ use crate::messaging::MessageData;
 pub mod postgres;
 
 pub fn beginning_global_position() -> u64 {
-    0
+    1
 }
 
 pub fn example() -> Vec<MessageData> {

@@ -2,6 +2,8 @@ use serde_json::Value;
 
 use std::collections::HashMap;
 
+use crate::DEFAULT_POSITION;
+
 pub mod postgres;
 
 pub trait PositionStore: PositionStoreTelemetry + std::fmt::Debug {
@@ -38,7 +40,7 @@ impl SubstitutePositionStore {
 impl PositionStore for SubstitutePositionStore {
     fn get(&mut self) -> u64 {
         self.record_get();
-        self.position.unwrap_or(0)
+        self.position.unwrap_or(DEFAULT_POSITION)
     }
     fn put(&mut self, _position: u64) {
         self.record_put();

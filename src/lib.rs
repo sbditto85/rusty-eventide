@@ -17,7 +17,7 @@ pub mod run_time;
 pub mod session;
 pub mod settings;
 
-const DEFAULT_POSITION_START: u64 = 0;
+const DEFAULT_POSITION: u64 = 1;
 const DEFAULT_POSITION_COUNTER: u64 = 0;
 
 #[derive(Debug)]
@@ -49,7 +49,7 @@ impl Consumer<SubstituteGetter, ConstantBackOff, SubstituteRunTime, SubstitutePo
             iterations: Arc::new(Mutex::new(0)),
             get: SubstituteGetter::new(category),
             back_off: ConstantBackOff::new(),
-            position: DEFAULT_POSITION_START,
+            position: DEFAULT_POSITION,
             position_update_counter: DEFAULT_POSITION_COUNTER,
             position_store: SubstitutePositionStore::new(),
             settings: Settings::new(),
@@ -69,7 +69,7 @@ impl Consumer<Category, ConstantBackOff, SystemRunTime, PostgresPositionStore> {
             iterations: Arc::new(Mutex::new(0)),
             get: Category::build(category).expect("category to build"), //TODO: handle error
             back_off: ConstantBackOff::build(),
-            position: DEFAULT_POSITION_START,
+            position: DEFAULT_POSITION,
             position_update_counter: DEFAULT_POSITION_COUNTER,
             position_store: PostgresPositionStore::build(),
             settings: Settings::build(),
@@ -175,7 +175,7 @@ impl<
     pub fn tick(&mut self) -> Result<u64, HandleError> {
         self.increment_iterations();
 
-        println!("Tick for Position: {}", self.position);
+        // println!("Tick for Position: {}", self.position);
         let messages = self.get.get(self.position as i64)?; //TODO: handle position
         let messages_length = messages.len();
 
@@ -406,7 +406,8 @@ mod unit_tests {
 
         // Assert
         assert!(result.is_err());
-        assert_eq!(handler.message_count(), 1);
+        let expected_handled_count = 1; // Stops after the first message
+        assert_eq!(handler.message_count(), expected_handled_count);
     }
 
     #[test]
@@ -605,7 +606,7 @@ mod unit_tests {
         let messages_count = messages.len() as u64;
 
         let position_store = consumer.position_store_mut();
-        position_store.set_position(messages_count);
+        position_store.set_position(messages_count + 1); // One after the queued messages
 
         // Act
         consumer.initialize();
