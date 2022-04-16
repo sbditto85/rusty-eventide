@@ -116,6 +116,35 @@ pub fn write_random_message_with_correlation_to_category(category: &str, correla
         .expect("random write to work");
 }
 
+pub fn write_one_random_message_with_data_to_category(data_map: HashMap<&str, &str>) -> String {
+    let mut session = Session::build().expect("session to build");
+
+    let category = crate::controls::category::unique_category();
+
+    let id = Uuid::new_v4();
+    let stream_name = format!("{}-{}", category, id.to_hyphenated().to_string());
+    let message_type = "Random";
+    let data = serde_json::to_value(&data_map).expect("to_string_to_work");
+    let meta_data: Option<serde_json::Value> = None;
+    let expected_version = -1i64;
+
+    session
+        .query(
+            "SELECT write_message($1::varchar, $2::varchar, $3::varchar, $4::jsonb, $5::jsonb, $6::bigint);",
+            &[
+                &id.to_hyphenated().to_string(),
+                &stream_name,
+                &message_type,
+                &data,
+                &meta_data,
+                &expected_version,
+            ],
+        )
+        .expect("random write to work");
+
+    category
+}
+
 pub fn write_one_random_message_for_consumer_and_one_not_to_random_category(
     consumer_group_member: u64,
     consumer_group_size: u64,
@@ -241,4 +270,13 @@ pub fn stream_id_not_for_consumer_in_group(
     }
 
     possible_uuid
+}
+
+pub fn enable_condition_for_session(session: &mut Session) {
+    session
+        .query(
+            "SELECT set_config('message_store.sql_condition', 'on', false);",
+            &[],
+        )
+        .expect("the mod query to run");
 }

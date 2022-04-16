@@ -37,11 +37,12 @@ impl Category {
     pub fn build_params(
         category: impl Into<String>,
         settings: Settings,
+        session: Session,
     ) -> Result<Self, CategoryError> {
         Ok(Self {
             category: category.into(),
             settings,
-            session: Session::build()?,
+            session,
         })
     }
 }
@@ -66,7 +67,7 @@ impl Get for Category {
             self.settings.consumer_group_member.map(|cgm| cgm as i64);
         let consumer_group_size: Option<i64> =
             self.settings.consumer_group_size.map(|cgs| cgs as i64);
-        let condition: Option<String> = None;
+        let condition: &Option<String> = &self.settings.condition;
 
         let rows = self.session
             .query("SELECT * FROM get_category_messages($1::varchar, $2::bigint, $3::bigint, $4::varchar, $5::bigint, $6::bigint, $7::varchar);", 
@@ -97,6 +98,8 @@ impl GetTelemetry for Category {
 
 #[cfg(all(test, feature = "integration_tests"))]
 mod integration_tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::{controls, settings::Settings};
 
@@ -183,8 +186,11 @@ mod integration_tests {
 
         let mut settings = Settings::new();
         settings.batch_size = Some(batch_size);
+
+        let session = Session::build().expect("session to be built");
+
         let mut category_get =
-            Category::build_params(category, settings).expect("category to build");
+            Category::build_params(category, settings, session).expect("category to build");
 
         // Act
         let beginning_position = 0;
@@ -213,8 +219,11 @@ mod integration_tests {
 
         let mut settings = Settings::new();
         settings.correlation = Some(correlation.to_string());
+
+        let session = Session::build().expect("session to be built");
+
         let mut category_get =
-            Category::build_params(category, settings).expect("category to build");
+            Category::build_params(category, settings, session).expect("category to build");
 
         // Act
         let beginning_position = 0;
@@ -246,8 +255,11 @@ mod integration_tests {
         let mut settings = Settings::new();
         settings.consumer_group_member = Some(consumer_group_member);
         settings.consumer_group_size = Some(consumer_group_size);
+
+        let session = Session::build().expect("session to be built");
+
         let mut category_get =
-            Category::build_params(category, settings).expect("category to build");
+            Category::build_params(category, settings, session).expect("category to build");
 
         // Act
         let beginning_position = 0;
@@ -259,8 +271,41 @@ mod integration_tests {
     }
 
     #[test]
-    #[ignore]
-    fn should_get_only_applicable_message_when_condition_supplied() {}
+    fn should_get_only_applicable_message_when_condition_supplied() {
+        init();
+
+        // Arrange
+        let mut data = HashMap::new();
+        data.insert("test", "true");
+        let condition = "data->>'test' = 'true'".to_string();
+
+        let category =
+            controls::messages::postgres::write_one_random_message_with_data_to_category(data);
+
+        controls::messages::postgres::write_random_message_to_category(&category);
+
+        let category_count = controls::messages::postgres::category_count(&category);
+        let expected_more_than = 1;
+        assert!(category_count > expected_more_than);
+
+        let mut settings = Settings::new();
+        settings.condition = Some(condition);
+
+        let mut session = Session::build().expect("to build a session");
+
+        controls::messages::postgres::enable_condition_for_session(&mut session);
+
+        let mut category_get =
+            Category::build_params(category, settings, session).expect("category to build");
+
+        // Act
+        let beginning_position = 0;
+        let messages = category_get.get(beginning_position).expect("get to work");
+
+        // Assert
+        let consumer_message_count = 1;
+        assert_eq!(messages.len(), consumer_message_count);
+    }
 
     #[test]
     #[ignore]
