@@ -25,6 +25,7 @@ pub trait GetTelemetry {
 pub struct SubstituteGetter {
     #[allow(dead_code)]
     category: String,
+    last_position: Option<i64>,
     messages: Vec<MessageData>,
     telemetry: HashMap<String, Value>,
 }
@@ -33,6 +34,7 @@ impl SubstituteGetter {
     pub fn new(category: &str) -> Self {
         Self {
             category: category.to_string(),
+            last_position: None,
             messages: vec![],
             telemetry: HashMap::new(),
         }
@@ -67,10 +69,15 @@ impl SubstituteGetter {
             })
             .unwrap_or(0)
     }
+
+    pub fn last_position_requested(&self) -> i64 {
+        self.last_position.unwrap_or(0)
+    }
 }
 
 impl Get for SubstituteGetter {
     fn get(&mut self, position: i64) -> Result<Vec<MessageData>, GetError> {
+        self.last_position = Some(position);
         self.record_get();
         if self.messages.len() > 0 {
             let messages = self.messages.clone();

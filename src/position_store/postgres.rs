@@ -25,5 +25,7 @@ impl PositionStoreTelemetry for PostgresPositionStore {
 #[cfg(all(test, feature = "integration_tests"))]
 mod integration_tests {
     #[test]
-    fn should_run() {}
+    fn should_run() {
+        // TODO: fill me in!
+    }
 }

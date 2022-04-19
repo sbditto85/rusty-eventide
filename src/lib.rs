@@ -325,28 +325,27 @@ mod unit_tests {
         assert_eq!(messages_count, get.get_messages_count());
     }
 
-    // #[test]
-    // #[ignore]
-    // fn should_request_next_position_on_next_tick() {
-    //     init();
+    #[test]
+    fn should_request_next_position_on_next_tick() {
+        init();
 
-    //     // Arrange
-    //     let mut consumer = Consumer::new("mycategory");
+        // Arrange
+        let mut consumer = Consumer::new("mycategory");
 
-    //     let messages = add_messages(&mut consumer);
-    //     let messages_count = messages.len() as u64;
+        let messages = add_messages(&mut consumer);
+        let messages_count = messages.len() as u64;
 
-    //     // Run one tick
-    //     let _ = consumer.tick();
+        // Run one tick
+        let _ = consumer.tick();
 
-    //     // Act
-    //     let _ = consumer.tick();
+        // Act
+        let _ = consumer.tick();
 
-    //     // Assert
-    //     let get = consumer.get();
-    //     //TODO: need to figure this out
-    //     // assert_eq!(messages_count as i64 + 1, get.last_position_requested());
-    // }
+        // Assert
+        let get = consumer.get();
+        //TODO: need to figure this out
+        assert_eq!(messages_count as i64 + 1, get.last_position_requested());
+    }
 
     /////////////////////
     // Running
