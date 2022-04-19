@@ -343,7 +343,6 @@ mod unit_tests {
 
         // Assert
         let get = consumer.get();
-        //TODO: need to figure this out
         assert_eq!(messages_count as i64 + 1, get.last_position_requested());
     }
 
@@ -618,9 +617,24 @@ mod unit_tests {
     }
 
     #[test]
-    #[ignore]
     fn should_start_at_default_global_position_with_no_position_stored() {
-        //TODO: do this
+        init();
+
+        // Arrange
+        let mut consumer = Consumer::new("mycategory");
+
+        add_messages(&mut consumer);
+        let expected_default_global_position = 1;
+
+        // Act
+        let _ = consumer.tick();
+
+        // Assert
+        let get = consumer.get();
+        assert_eq!(
+            expected_default_global_position,
+            get.last_position_requested()
+        );
     }
 
     /////////////////////
