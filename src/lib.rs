@@ -72,7 +72,7 @@ impl Consumer<Category, ConstantBackOff, SystemRunTime, PostgresPositionStore> {
             back_off: ConstantBackOff::build(),
             position: DEFAULT_POSITION,
             position_update_counter: DEFAULT_POSITION_COUNTER,
-            position_store: PostgresPositionStore::build(),
+            position_store: PostgresPositionStore::build(category),
             settings: Settings::build(),
         }
     }
@@ -125,6 +125,32 @@ impl<
         // TODO: Should be controlled by RunTime somehow???
         let handle = std::thread::spawn(move || -> Result<Consumer<G, B, R, P>, HandleError> {
             self.initialize();
+
+            // Eventide has 3 main pieces that fulfill this loop, tick, and handle message
+            //  - An actor (Actor) that handles triggering the subscription and sending messages to the consumer
+            //    - On start calls to request_batch
+            //      - This sends a message to the subscription to get_batch
+            //    - on get_batch reply
+            //      - append batch to pre-fetch queue
+            //      - if the pre-fetch queue isn't too big then call request_batch (stop the cycle if to big)
+            //      - if the pre-fetch queue previously was empty then send a dispatch message to itself
+            //    - on dispatch
+            //      - grab a message
+            //      - if pre-fetch queue is down to acceptable size then request_batch (starts the cycle again)
+            //      - call dispatch method on consumer
+            //      - if pre-fetch queue isn't empty then call dispatch again
+            //  - A subscription (Actor) that is responsible for "one" batch of messages at a time
+            //    - On startup calls resupply
+            //    - resupply will poll trying to get a batch
+            //      - poll will have an interval time it uses between poll, then a timeout time which will cause the poll to return nil and give control back to the actor
+            //      - if successful assign to next_batch (and then waits doing nothing)
+            //      - if empty continue trying to resupply
+            //    - Calls to get_batch, continue calling until a batch is available
+            //      - once available it
+            //        - resets next_batch to nil
+            //        - sends the batch as a get_batch reply
+            //        - triggers resupply on itself
+            //  - A consumer (Not an Actor) that handles one message at a time and updates its position
 
             let mut should_continue = true;
             while should_continue {
@@ -188,6 +214,7 @@ impl<
         Ok(messages_length as u64)
     }
 
+    // In Eventide this is the "consumer"
     fn handle_message(&mut self, message_data: MessageData) -> Result<(), HandleError> {
         for handler in &mut self.handlers {
             handler.handle(message_data.clone())?;
