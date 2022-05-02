@@ -365,7 +365,6 @@ mod integration_tests {
 
         // Arrange
         let starting_global_position = controls::messages::postgres::current_max_global_position();
-        assert!(starting_global_position > 0);
 
         let category = controls::messages::postgres::write_random_message_to_random_category();
         let category_count = controls::messages::postgres::category_count(&category);
