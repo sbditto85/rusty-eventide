@@ -5,11 +5,11 @@ use std::thread::JoinHandle;
 use crate::back_off::{constant::ConstantBackOff, BackOff};
 // use controls::handler;
 use crate::messaging::{postgres::Category, *};
-use crate::position_store::{
-    postgres::PostgresPositionStore, PositionStore, SubstitutePositionStore,
-};
 use crate::run_time::{RunTime, SubstituteRunTime, SystemRunTime};
 use crate::settings::*;
+use position_store::{postgres::PostgresPositionStore, PositionStore, SubstitutePositionStore};
+
+pub mod position_store;
 
 // TODO: maybe get defaults depending on what is fulfilling the get?
 pub(crate) const DEFAULT_POSITION: u64 = 1;
