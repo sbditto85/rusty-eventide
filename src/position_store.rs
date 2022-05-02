@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use std::collections::HashMap;
 
-use crate::DEFAULT_POSITION;
+use crate::consumer::DEFAULT_POSITION;
 
 pub mod postgres;
 

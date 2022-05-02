@@ -25,6 +25,7 @@ impl messaging::Handler for EventHandler {
 mod test {
 
     use super::*;
+    use rusty_eventide::consumer::Consumer;
 
     #[test]
     fn should_start_a_consumer() {

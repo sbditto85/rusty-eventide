@@ -1,4 +1,4 @@
-use rusty_eventide::{messaging::HandleError, *};
+use rusty_eventide::{consumer::Consumer, messaging::HandleError, *};
 
 #[derive(Debug)]
 pub struct EventHandler;
