@@ -21,32 +21,32 @@ impl messaging::Handler for EventHandler {
     }
 }
 
-#[cfg(all(test, feature = "integration_tests"))]
-mod test {
+// #[cfg(all(test, feature = "integration_tests"))]
+// mod test {
 
-    use super::*;
-    use rusty_eventide::consumer::Consumer;
+//     use super::*;
+//     use rusty_eventide::consumer::Consumer;
 
-    #[test]
-    fn should_start_a_consumer() {
-        let mut consumer = Consumer::build("category")
-            .add_handler(EventHandler::build())
-            .start();
+//     #[test]
+//     fn should_start_a_consumer() {
+//         let mut consumer = Consumer::build("category")
+//             .add_handler(EventHandler::build())
+//             .start();
 
-        assert!(consumer.started());
-        consumer.stop();
-        assert!(consumer.stopped());
-    }
+//         assert!(consumer.started());
+//         consumer.stop();
+//         assert!(consumer.stopped());
+//     }
 
-    #[test]
-    fn should_start_a_consumer_with_settings() {
-        let mut consumer = Consumer::build("category:command")
-            .with_settings(Settings::new())
-            .add_handler(EventHandler::build())
-            .start();
+//     #[test]
+//     fn should_start_a_consumer_with_settings() {
+//         let mut consumer = Consumer::build("category:command")
+//             .with_settings(Settings::new())
+//             .add_handler(EventHandler::build())
+//             .start();
 
-        assert!(consumer.started());
-        consumer.stop();
-        assert!(consumer.stopped());
-    }
-}
+//         assert!(consumer.started());
+//         consumer.stop();
+//         assert!(consumer.stopped());
+//     }
+// }

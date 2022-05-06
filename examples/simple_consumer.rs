@@ -1,4 +1,4 @@
-use rusty_eventide::{consumer::Consumer, messaging::HandleError, *};
+use rusty_eventide::{/*consumer::Consumer, */ messaging::HandleError, *};
 
 #[derive(Debug)]
 pub struct EventHandler;
@@ -21,11 +21,11 @@ impl messaging::Handler for EventHandler {
 }
 
 fn main() {
-    let consumer_handle = Consumer::build("category")
-        .add_handler(EventHandler::build())
-        .start();
+    // let consumer_handle = Consumer::build("category")
+    //     .add_handler(EventHandler::build())
+    //     .start();
 
-    let result = consumer_handle.wait();
+    // let result = consumer_handle.wait();
 
-    println!("Finished with: {:?}", result);
+    // println!("Finished with: {:?}", result);
 }

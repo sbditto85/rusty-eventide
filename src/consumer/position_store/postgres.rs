@@ -47,7 +47,7 @@ mod integration_tests {
         let category = controls::category::unique_category();
         let mut position_store = PostgresPositionStore::build(&category);
         let position = 1;
-        let postiion_stream_name = stream_name(&category);
+        let position_stream_name = stream_name(&category);
 
         // Act
         position_store.put(position);
