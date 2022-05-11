@@ -303,6 +303,13 @@ pub(crate) const DEFAULT_POSITION_COUNTER: u64 = 0;
 //     // }
 // }
 
+pub mod actor;
+pub mod builder;
+pub mod subscription;
+
+pub struct Consumer {
+    pub category: String,
+}
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -313,25 +320,61 @@ mod unit_tests {
     }
 
     /////////////////////
+    // Start (Using Builder to emulate their class methods)
+    /////////////////////
+
+    #[actix::test]
+    async fn should_assign_category_on_start() {
+        use futures::future::{FutureExt, LocalBoxFuture};
+        // Arrange
+        let mut consumer_category = None;
+        let mut builder = controls::consumer::builder::example();
+        builder.set_probe(
+            |consumer, actor_address, subscription_address| -> LocalBoxFuture<()> {
+                consumer_category = Some(consumer.category.clone());
+
+                async {
+                    actor_address
+                        .send(actor::messages::Stop)
+                        .await
+                        .expect("Actor stop to work");
+                    subscription_address
+                        .send(subscription::messages::Stop)
+                        .await
+                        .expect("Subscription stop to work");
+                }
+                .boxed_local()
+            },
+        );
+        let category = controls::category::example();
+
+        // Act
+        let result = builder.start(&category);
+
+        // Assert
+        assert_eq!(consumer_category, Some(category));
+    }
+
+    /////////////////////
     // Get
     /////////////////////
 
-    #[test]
-    fn should_start_by_asking_for_the_next_batch_of_messages() {
-        init();
+    // #[test]
+    // fn should_start_by_asking_for_the_next_batch_of_messages() {
+    //     init();
 
-        // TODO: Idea Perhaps a static method `start` that takes a category and returns the consumer entity and starts the actors
+    //     // TODO: Idea Perhaps a builder pattern with a `start` method that takes a category and returns the consumer entity and starts the actors
 
-        // // Arrange
-        // let mut consumer = controls::consumer::example("mycategory");
+    //     // // Arrange
+    //     // let mut consumer = controls::consumer::example("mycategory");
 
-        // // Act
-        // let _ = consumer.start();
+    //     // // Act
+    //     // let _ = consumer.start();
 
-        // // Assert
-        // let get = consumer.get();
-        // assert!(get.get_count() > 0);
-    }
+    //     // // Assert
+    //     // let get = consumer.get();
+    //     // assert!(get.get_count() > 0);
+    // }
 
     // #[test]
     // fn should_return_same_number_of_queued_messages_on_tick() {
