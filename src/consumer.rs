@@ -312,6 +312,8 @@ pub struct Consumer {
 }
 #[cfg(test)]
 mod unit_tests {
+    use futures::future::{FutureExt, LocalBoxFuture};
+
     use super::*;
     use crate::controls;
 
@@ -325,7 +327,8 @@ mod unit_tests {
 
     #[actix::test]
     async fn should_assign_category_on_start() {
-        use futures::future::{FutureExt, LocalBoxFuture};
+        init();
+
         // Arrange
         let mut consumer_category = None;
         let mut builder = controls::consumer::builder::example();
@@ -346,10 +349,10 @@ mod unit_tests {
                 .boxed_local()
             },
         );
-        let category = controls::category::example();
+        let category = controls::messages::category::example();
 
         // Act
-        let result = builder.start(&category);
+        let _result = builder.start(&category);
 
         // Assert
         assert_eq!(consumer_category, Some(category));

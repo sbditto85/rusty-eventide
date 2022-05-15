@@ -2,8 +2,10 @@ use std::error::Error as StdError;
 
 use thiserror::Error;
 
+pub mod category;
 pub mod get;
 pub mod postgres;
+pub mod stream_name;
 
 pub use get::*;
 

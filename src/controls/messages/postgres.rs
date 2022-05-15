@@ -7,7 +7,7 @@ use crate::session::Session;
 pub fn write_random_message_to_random_category() -> String {
     let mut session = Session::build().expect("session to build");
 
-    let category = crate::controls::category::unique_category();
+    let category = crate::controls::messages::category::unique_category();
 
     let id = Uuid::new_v4();
     let stream_name = format!("{}-{}", category, id.to_hyphenated().to_string());
@@ -119,7 +119,7 @@ pub fn write_random_message_with_correlation_to_category(category: &str, correla
 pub fn write_one_random_message_with_data_to_category(data_map: HashMap<&str, &str>) -> String {
     let mut session = Session::build().expect("session to build");
 
-    let category = crate::controls::category::unique_category();
+    let category = crate::controls::messages::category::unique_category();
 
     let id = Uuid::new_v4();
     let stream_name = format!("{}-{}", category, id.to_hyphenated().to_string());
@@ -151,7 +151,7 @@ pub fn write_one_random_message_for_consumer_and_one_not_to_random_category(
 ) -> String {
     let mut session = Session::build().expect("session to build");
 
-    let category = crate::controls::category::unique_category();
+    let category = crate::controls::messages::category::unique_category();
 
     let id = stream_id_for_consumer_in_group(consumer_group_member, consumer_group_size);
     let stream_name = format!("{}-{}", category, id.to_hyphenated().to_string());

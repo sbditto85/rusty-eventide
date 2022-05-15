@@ -112,7 +112,7 @@ mod integration_tests {
         init();
 
         // Arrange
-        let category = controls::category::unique_category();
+        let category = controls::messages::category::unique_category();
         let mut category_get = Category::build(category).expect("category to build");
 
         // Act

@@ -44,7 +44,7 @@ mod integration_tests {
         init();
 
         // Arrange
-        let category = controls::category::unique_category();
+        let category = controls::messages::category::unique_category();
         let mut position_store = PostgresPositionStore::build(&category);
         let position = 1;
         let position_stream_name = stream_name(&category);

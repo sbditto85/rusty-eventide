@@ -1,6 +1,8 @@
 use crate::messaging::MessageData;
 
+pub mod category;
 pub mod postgres;
+pub mod stream_name;
 
 pub fn beginning_global_position() -> u64 {
     1
