@@ -352,7 +352,7 @@ mod unit_tests {
         let category = controls::messages::category::example();
 
         // Act
-        let _result = builder.start(&category);
+        let _result = builder.start(&category).await;
 
         // Assert
         assert_eq!(consumer_category, Some(category));

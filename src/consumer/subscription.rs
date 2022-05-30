@@ -1,3 +1,5 @@
+use actix::ActorContext;
+
 pub mod messages;
 
 pub struct Subscription;
@@ -9,5 +11,7 @@ impl actix::Actor for Subscription {
 impl actix::Handler<messages::Stop> for Subscription {
     type Result = ();
 
-    fn handle(&mut self, msg: messages::Stop, ctx: &mut actix::Context<Self>) {}
+    fn handle(&mut self, _msg: messages::Stop, ctx: &mut actix::Context<Self>) {
+        ctx.stop()
+    }
 }

@@ -1,3 +1,5 @@
+use actix::ActorContext;
+
 pub mod messages;
 
 pub struct Actor;
@@ -9,5 +11,7 @@ impl actix::Actor for Actor {
 impl actix::Handler<messages::Stop> for Actor {
     type Result = ();
 
-    fn handle(&mut self, msg: messages::Stop, ctx: &mut actix::Context<Self>) {}
+    fn handle(&mut self, _msg: messages::Stop, ctx: &mut actix::Context<Self>) {
+        ctx.stop()
+    }
 }
