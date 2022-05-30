@@ -41,3 +41,54 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod unit_tests {
+    use futures::future::{FutureExt, LocalBoxFuture};
+
+    use crate::consumer::{actor, subscription};
+
+    use super::*;
+    use crate::controls;
+
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    /////////////////////
+    // Start (Using Builder to emulate their class methods)
+    /////////////////////
+
+    #[actix::test]
+    async fn should_assign_category_on_start() {
+        init();
+
+        // Arrange
+        let mut consumer_category = None;
+        let mut builder = controls::consumer::builder::example();
+        builder.set_probe(
+            |consumer, actor_address, subscription_address| -> LocalBoxFuture<()> {
+                consumer_category = Some(consumer.category.clone());
+
+                async {
+                    actor_address
+                        .send(actor::messages::Stop)
+                        .await
+                        .expect("Actor stop to work");
+                    subscription_address
+                        .send(subscription::messages::Stop)
+                        .await
+                        .expect("Subscription stop to work");
+                }
+                .boxed_local()
+            },
+        );
+        let category = controls::messages::category::example();
+
+        // Act
+        builder.start(&category).await;
+
+        // Assert
+        assert_eq!(consumer_category, Some(category));
+    }
+}
