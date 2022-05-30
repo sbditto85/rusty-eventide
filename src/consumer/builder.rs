@@ -17,7 +17,7 @@ impl<F> ConsumerBuilder<F>
 where
     F: for<'a> FnMut(
         &'a Consumer,
-        &'a Addr<Actor>,
+        &'a Addr<Actor<Subscription>>,
         &'a Addr<Subscription>,
     ) -> LocalBoxFuture<'a, ()>,
 {
@@ -33,8 +33,8 @@ where
             category: category.into(),
         };
 
-        let actor_address = Actor.start();
         let subscription_address = Subscription.start();
+        let actor_address = Actor::new(subscription_address.clone()).start();
 
         if let Some(probe) = self.probe.as_mut() {
             probe(&consumer, &actor_address, &subscription_address).await;
