@@ -1,11 +1,12 @@
 use super::{PositionStore, PositionStoreTelemetry};
 
-pub fn stream_name(category: &str) -> String {
+pub fn stream_name(_category: &str) -> String {
     "".to_string()
 }
 
 #[derive(Debug)]
 pub struct PostgresPositionStore {
+    #[allow(dead_code)]
     category: String,
 }
 

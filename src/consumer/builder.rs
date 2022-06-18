@@ -48,7 +48,7 @@ mod unit_tests {
 
     use crate::consumer::{actor, subscription};
 
-    use super::*;
+    // use super::*;
     use crate::controls;
 
     fn init() {

@@ -1,19 +1,19 @@
-use std::ops::Deref;
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
+// use std::ops::Deref;
+// use std::sync::{Arc, Mutex};
+// use std::thread::JoinHandle;
 
-use crate::back_off::{constant::ConstantBackOff, BackOff};
-// use controls::handler;
-use crate::messaging::{postgres::Category, *};
-use crate::run_time::{RunTime, SubstituteRunTime, SystemRunTime};
-use crate::settings::*;
-use position_store::{postgres::PostgresPositionStore, PositionStore, SubstitutePositionStore};
+// use crate::back_off::{constant::ConstantBackOff, BackOff};
+// // use controls::handler;
+// use crate::messaging::{postgres::Category, *};
+// use crate::run_time::{RunTime, SubstituteRunTime, SystemRunTime};
+// use crate::settings::*;
+// use position_store::{postgres::PostgresPositionStore, PositionStore, SubstitutePositionStore};
 
 pub mod position_store;
 
 // TODO: maybe get defaults depending on what is fulfilling the get?
 pub(crate) const DEFAULT_POSITION: u64 = 1;
-pub(crate) const DEFAULT_POSITION_COUNTER: u64 = 0;
+// pub(crate) const DEFAULT_POSITION_COUNTER: u64 = 0;
 
 // #[derive(Debug)]
 // pub struct Consumer<G: Get, B: BackOff, R: RunTime, P: PositionStore> {

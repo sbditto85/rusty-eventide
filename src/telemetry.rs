@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 pub mod sink;
 
 use sink::Sink;
@@ -21,6 +23,13 @@ impl Telemetry {
             s.record(signal_string.clone());
         }
     }
+
+    pub fn record_data<S: Into<String>>(&mut self, signal: S, data: Value) {
+        let signal_string = signal.into();
+        for s in self.sinks.iter_mut() {
+            s.record_data(signal_string.clone(), data.clone());
+        }
+    }
 }
 
 #[cfg(test)]
@@ -38,7 +47,7 @@ mod unit_tests {
         init();
 
         let mut telemetry = Telemetry::new();
-        let mut sink = sink::Sink::new();
+        let sink = sink::Sink::new();
         telemetry.register(sink.clone());
 
         let signal = controls::telemetry::signal();
@@ -46,5 +55,21 @@ mod unit_tests {
         telemetry.record(signal);
 
         assert!(sink.recorded(signal))
+    }
+
+    #[test]
+    fn should_send_data_to_sink() {
+        init();
+
+        let mut telemetry = Telemetry::new();
+        let sink = sink::Sink::new();
+        telemetry.register(sink.clone());
+
+        let signal = controls::telemetry::signal();
+        let data = controls::telemetry::data();
+
+        telemetry.record_data(signal, data.clone());
+
+        assert_eq!(sink.data_recorded(signal), data)
     }
 }

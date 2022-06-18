@@ -12,8 +12,8 @@ impl actix::Actor for Subscription {
 impl actix::Handler<messages::GetBatch> for Subscription {
     type Result = ();
 
-    fn handle(&mut self, _msg: messages::GetBatch, ctx: &mut actix::Context<Self>) {
-        // ctx.stop()
+    fn handle(&mut self, _msg: messages::GetBatch, _ctx: &mut actix::Context<Self>) {
+        // actually handle getting a batch
     }
 }
 
