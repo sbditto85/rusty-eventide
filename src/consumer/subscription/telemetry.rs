@@ -1,1 +1,1 @@
-pub const GET_BATCH: &'static str = "get_batch_count";
+pub const GET_BATCH: &'static str = "get_batch";

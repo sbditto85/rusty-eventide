@@ -68,7 +68,7 @@ where
         _msg: messages::Dispatch,
         _ctx: &mut actix::Context<Self>,
     ) -> Self::Result {
-        self.telemetry.record(telemetry::DISPATCHES);
+        self.telemetry.record(telemetry::DISPATCH);
     }
 }
 
@@ -230,6 +230,6 @@ mod unit_tests {
         actor_addr.do_send(messages::Stop);
 
         // Assert
-        assert!(sink.recorded(telemetry::DISPATCHES));
+        assert!(sink.recorded(telemetry::DISPATCH));
     }
 }
