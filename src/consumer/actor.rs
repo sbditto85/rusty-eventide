@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use actix::{
     dev::ToEnvelope,
     Actor as ActixActor,
@@ -10,23 +12,28 @@ use actix::{
     // WrapFuture,
 };
 
-use crate::{consumer::subscription::messages as subscription_messages, telemetry::Telemetry};
+use crate::{
+    consumer::{subscription::messages as subscription_messages, Consumer},
+    telemetry::Telemetry,
+};
 
 pub mod messages;
 pub mod telemetry;
 
 pub struct Actor<S: actix::Actor> {
     subscription_addr: Addr<S>,
+    consumer: Consumer,
     telemetry: Telemetry,
-    pre_fetch_queue: Vec<()>,
+    pre_fetch_queue: VecDeque<()>,
 }
 
 impl<S: actix::Actor> Actor<S> {
-    pub fn new(subscription_addr: Addr<S>) -> Self {
+    pub fn new(subscription_addr: Addr<S>, consumer: Consumer) -> Self {
         Self {
             subscription_addr,
+            consumer,
             telemetry: Telemetry::new(),
-            pre_fetch_queue: Vec::new(),
+            pre_fetch_queue: VecDeque::new(),
         }
     }
 
@@ -34,7 +41,7 @@ impl<S: actix::Actor> Actor<S> {
         &mut self.telemetry
     }
 
-    pub fn pre_fetch_queue(&self) -> &Vec<()> {
+    pub fn pre_fetch_queue(&self) -> &VecDeque<()> {
         &self.pre_fetch_queue
     }
 }
@@ -69,6 +76,9 @@ where
         _ctx: &mut actix::Context<Self>,
     ) -> Self::Result {
         self.telemetry.record(telemetry::DISPATCH);
+        if let Some(message) = self.pre_fetch_queue.pop_front() {
+            self.consumer.dispatch(message);
+        }
     }
 }
 
@@ -149,8 +159,10 @@ mod unit_tests {
 
         let subscription_addr = subscription.start();
 
+        let consumer = controls::consumer::example();
+
         // Act
-        let addr = Actor::new(subscription_addr.clone()).start();
+        let addr = Actor::new(subscription_addr.clone(), consumer).start();
 
         addr.send(messages::Stop).await.expect("send to work");
         subscription_addr
@@ -179,8 +191,10 @@ mod unit_tests {
         let subscription_addr = subscription.start();
         let batch = controls::consumer::subscription_substitute::batch();
 
+        let consumer = controls::consumer::example();
+
         // Act
-        let mut actor = Actor::new(subscription_addr.clone());
+        let mut actor = Actor::new(subscription_addr.clone(), consumer);
         let telemetry = actor.telemetry();
         let sink = sink::Sink::new();
         telemetry.register(sink.clone());
@@ -196,7 +210,7 @@ mod unit_tests {
         subscription_addr.do_send(subscription_messages::Stop);
 
         // Assert
-        let pre_fetched: Vec<()> =
+        let pre_fetched: VecDeque<()> =
             serde_json::from_value(sink.data_recorded(telemetry::PRE_FETCH_QUEUED))
                 .expect("pre_fetch batch to parse from telemetry");
         assert!(pre_fetched == batch);
@@ -212,8 +226,10 @@ mod unit_tests {
         let subscription_addr = subscription.start();
         let batch = controls::consumer::subscription_substitute::batch();
 
+        let consumer = controls::consumer::example();
+
         // Act
-        let mut actor = Actor::new(subscription_addr.clone());
+        let mut actor = Actor::new(subscription_addr.clone(), consumer);
         let telemetry = actor.telemetry();
         let sink = sink::Sink::new();
         telemetry.register(sink.clone());
@@ -231,5 +247,39 @@ mod unit_tests {
 
         // Assert
         assert!(sink.recorded(telemetry::DISPATCH));
+    }
+
+    #[actix::test]
+    async fn should_send_call_consumer_on_dispatch() {
+        init();
+
+        // Arrange
+        let subscription =
+            controls::consumer::subscription_substitute::SubscriptionSubstitute::new();
+        let subscription_addr = subscription.start();
+
+        let mut consumer = controls::consumer::example();
+        let telemetry = consumer.telemetry();
+        let sink = sink::Sink::new();
+        telemetry.register(sink.clone());
+
+        let batch = controls::consumer::subscription_substitute::batch();
+
+        let mut actor = Actor::new(subscription_addr.clone(), consumer);
+        actor.pre_fetch_queue = batch;
+
+        // Act
+
+        let actor_addr = actor.start();
+        actor_addr
+            .send(messages::Dispatch)
+            .await
+            .expect("send to work");
+
+        subscription_addr.do_send(subscription_messages::Stop);
+        actor_addr.do_send(messages::Stop);
+
+        // Assert
+        assert!(sink.recorded(consumer::telemetry::DISPATCH));
     }
 }

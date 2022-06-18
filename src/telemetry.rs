@@ -4,6 +4,7 @@ pub mod sink;
 
 use sink::Sink;
 
+#[derive(Debug, Clone)]
 pub struct Telemetry {
     sinks: Vec<Sink>,
 }

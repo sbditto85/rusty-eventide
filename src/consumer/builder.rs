@@ -29,12 +29,10 @@ where
     where
         C: Into<String>,
     {
-        let consumer = Consumer {
-            category: category.into(),
-        };
+        let consumer = Consumer::new(category);
 
         let subscription_address = Subscription.start();
-        let actor_address = Actor::new(subscription_address.clone()).start();
+        let actor_address = Actor::new(subscription_address.clone(), consumer.clone()).start();
 
         if let Some(probe) = self.probe.as_mut() {
             probe(&consumer, &actor_address, &subscription_address).await;

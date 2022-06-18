@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use actix::ActorContext;
 use serde_json::{value::Number, Value};
 
@@ -42,6 +44,10 @@ impl actix::Handler<messages::Stop> for SubscriptionSubstitute {
     }
 }
 
-pub fn batch() -> Vec<()> {
-    vec![(), (), ()]
+pub fn batch() -> VecDeque<()> {
+    let mut v = VecDeque::new();
+    v.push_back(());
+    v.push_back(());
+    v.push_back(());
+    v
 }

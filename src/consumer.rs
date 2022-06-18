@@ -9,6 +9,8 @@
 // use crate::settings::*;
 // use position_store::{postgres::PostgresPositionStore, PositionStore, SubstitutePositionStore};
 
+use crate::telemetry::Telemetry;
+
 pub mod position_store;
 
 // TODO: maybe get defaults depending on what is fulfilling the get?
@@ -306,10 +308,34 @@ pub(crate) const DEFAULT_POSITION: u64 = 1;
 pub mod actor;
 pub mod builder;
 pub mod subscription;
+pub mod telemetry;
 
+#[derive(Debug, Clone)]
 pub struct Consumer {
     pub category: String,
+    pub telemetry: Telemetry,
 }
+
+impl Consumer {
+    pub fn new<S>(category: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self {
+            category: category.into(),
+            telemetry: Telemetry::new(),
+        }
+    }
+
+    pub fn telemetry(&mut self) -> &mut Telemetry {
+        &mut self.telemetry
+    }
+
+    pub fn dispatch(&mut self, _message: ()) {
+        self.telemetry.record(telemetry::DISPATCH);
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     // use super::*;
