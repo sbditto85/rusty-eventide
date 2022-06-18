@@ -4,6 +4,7 @@ use actix::{
     ActorContext,
     // ActorFutureExt,
     Addr,
+    AsyncContext,
     // AsyncContext,
     // ResponseActFuture,
     // WrapFuture,
@@ -53,6 +54,25 @@ where
 }
 
 // Docs for async /actix/fut/future/trait.ActorFuture.html
+impl<S> actix::Handler<messages::Dispatch> for Actor<S>
+where
+    S: actix::Actor,
+    <S as actix::Actor>::Context: ToEnvelope<S, subscription_messages::GetBatch>,
+    S: actix::Handler<subscription_messages::GetBatch>,
+{
+    // type Result = ResponseActFuture<Self, ()>;
+    type Result = ();
+
+    fn handle(
+        &mut self,
+        _msg: messages::Dispatch,
+        _ctx: &mut actix::Context<Self>,
+    ) -> Self::Result {
+        self.telemetry.record(telemetry::DISPATCHES);
+    }
+}
+
+// Docs for async /actix/fut/future/trait.ActorFuture.html
 impl<S> actix::Handler<messages::GetBatchReply> for Actor<S>
 where
     S: actix::Actor,
@@ -64,12 +84,17 @@ where
 
     fn handle(
         &mut self,
-        get_batch_reply: messages::GetBatchReply,
-        _ctx: &mut actix::Context<Self>,
+        mut get_batch_reply: messages::GetBatchReply,
+        ctx: &mut actix::Context<Self>,
     ) -> Self::Result {
         let data = serde_json::to_value(get_batch_reply.batch.clone()).expect("here");
         self.telemetry
             .record_data(telemetry::PRE_FETCH_QUEUED, data);
+
+        self.pre_fetch_queue.append(&mut get_batch_reply.batch);
+
+        ctx.notify(messages::Dispatch);
+
         // // Send Get Batch
         // let get_batch_response = self.subscription_addr.send(subscription_messages::GetBatch);
         // Box::pin(
@@ -175,5 +200,36 @@ mod unit_tests {
             serde_json::from_value(sink.data_recorded(telemetry::PRE_FETCH_QUEUED))
                 .expect("pre_fetch batch to parse from telemetry");
         assert!(pre_fetched == batch);
+    }
+
+    #[actix::test]
+    async fn should_send_dispatch_when_sent_subscription_batch() {
+        init();
+
+        // Arrange
+        let subscription =
+            controls::consumer::subscription_substitute::SubscriptionSubstitute::new();
+        let subscription_addr = subscription.start();
+        let batch = controls::consumer::subscription_substitute::batch();
+
+        // Act
+        let mut actor = Actor::new(subscription_addr.clone());
+        let telemetry = actor.telemetry();
+        let sink = sink::Sink::new();
+        telemetry.register(sink.clone());
+
+        let actor_addr = actor.start();
+        actor_addr
+            .send(messages::GetBatchReply {
+                batch: batch.clone(),
+            })
+            .await
+            .expect("send to work");
+
+        subscription_addr.do_send(subscription_messages::Stop);
+        actor_addr.do_send(messages::Stop);
+
+        // Assert
+        assert!(sink.recorded(telemetry::DISPATCHES));
     }
 }
