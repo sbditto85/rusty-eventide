@@ -217,7 +217,7 @@ mod unit_tests {
     }
 
     #[actix::test]
-    async fn should_send_dispatch_when_sent_subscription_batch() {
+    async fn should_send_dispatch_when_sent_subscription_batch_and_pre_fetch_queue_empty() {
         init();
 
         // Arrange
@@ -250,7 +250,13 @@ mod unit_tests {
     }
 
     #[actix::test]
-    async fn should_send_call_consumer_on_dispatch() {
+    #[ignore]
+    async fn should_not_send_dispatch_when_sent_subscription_batch_and_pre_fetch_queue_not_empty() {
+        init();
+    }
+
+    #[actix::test]
+    async fn should_call_consumer_on_dispatch() {
         init();
 
         // Arrange
@@ -281,5 +287,35 @@ mod unit_tests {
 
         // Assert
         assert!(sink.recorded(consumer::telemetry::DISPATCH));
+    }
+
+    #[actix::test]
+    #[ignore]
+    async fn should_request_more_on_reply_when_queue_not_at_limit() {
+        init();
+    }
+
+    #[actix::test]
+    #[ignore]
+    async fn should_not_request_more_on_reply_when_queue_above_limit() {
+        init();
+    }
+
+    #[actix::test]
+    #[ignore]
+    async fn should_request_more_on_dispatch_when_queue_back_down_to_limit() {
+        init();
+    }
+
+    #[actix::test]
+    #[ignore]
+    async fn should_call_dispatch_on_dispatch_if_queue_is_not_empty() {
+        init();
+    }
+
+    #[actix::test]
+    #[ignore]
+    async fn should_not_call_dispatch_on_dispatch_if_queue_is_empty() {
+        init();
     }
 }
